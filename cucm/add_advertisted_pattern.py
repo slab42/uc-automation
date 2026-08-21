@@ -98,7 +98,9 @@ if __name__ == '__main__':
     # Get server and login credentials
     cucmInfoFile = input('CUCM JSON File (cucm-info.json): ') or 'cucm-info.json'
     username, password, cucm, version = serverSetup(basepath / cucmInfoFile, 'username', 'password', 'server', 'version', 'non-api')
-
+    if password == '':
+        password = input('Enter CUCM Password for ' + username + ':')
+        
     # Setup Logging
     logger = loggerSetup(basepath / 'logs' / (basepath / 'logs' / (log_filename_prefix + cucm + '-' + (time.strftime("%Y_%m_%d-%H_%M_%S")) + '.log')))
 
