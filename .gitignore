@@ -144,3 +144,9 @@ add_softphones.py
 
 # MAC DS Store
 .DS_Store
+
+# Log folder:
+logs/
+
+# Any settings ini files:
+*.ini
