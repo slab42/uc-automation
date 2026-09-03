@@ -72,9 +72,30 @@ class AXL(object):
             result['error'] = error.message
         result = serialize_object(result)
         return result
-    
-    
-    
+
+
+    def remove_advertised_patterns(self, pattern):
+        """Remove Advertised Pattern
+        :param pattern: Pattern String
+        :return result dictionary
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+        try:
+            self.service.removeAdvertisedPatterns(pattern=pattern)
+            result['success'] = True
+            result['response'] = f'{pattern} Advertised Pattern Removed Successfully'
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        result = serialize_object(result)
+        return result
+
+
+
     def add_Calling_Search_Space(self,
                                  name,
                                  description='',

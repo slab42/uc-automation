@@ -68,7 +68,7 @@ def use_csv():
     """
     print('\nCSV Must have header row and must contain only 1 pattern settings per row')
     print('Field Order: dn, routePartition')
-    input_file = input('Enter CSV file name or full path (default filename: dnEnterpriseAltNumbers.csv): ') or 'dnEnterpriseAltNumbers.csv'
+    input_file = input('Enter CSV file name or full path (default filename: rm_dnEnterpriseAltNumbers.csv): ') or 'rm_dnEnterpriseAltNumbers.csv'
     with open(input_file, 'r', encoding='utf8') as my_file:
         csv_file = reader(my_file)
         next(my_file)

@@ -2,7 +2,7 @@
 import requests
 import json
 
-bearerToken = 'ZjM5ZGFjMGMtZTMwNC00MTJiLTkwOTUtZTQ0NjhhNWI0ZTljOGZhYWY0NGEtOGYw_PF84_384514e5-a1fb-40ab-b4f9-19a09687d6bd'
+bearerToken = 'NDBhNmQ2ODgtNGViYy00NDY5LTkzNGItZDJjMGJhNWVmOGUxOTM1ZWU0YTUtYmVh_PF84_740bb8c4-0bd2-4f31-ad74-305a31d698d7'
 
 ####. Get list of Location ID's:
 url = "https://webexapis.com/v1/telephony/config/locations"
@@ -21,8 +21,8 @@ response = requests.request('GET', url, headers=headers, data = payload)
 
 data = json.loads(response.text)
 
-# print(f'INFO: This is the data output:')
-# print(data)
+print(f'INFO: This is the data output:')
+print(data)
 
 # Build list of Location IDs
 location_ids = [location["id"] for location in data["locations"]]
