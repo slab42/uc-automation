@@ -5,7 +5,11 @@ Move existing Directory Numbers to a different Route Partition,
 individually or from a list in CSV.
 
 Usage:
-    python3 move_DN_partition.py
+    python3 move_DN_partition.py [--reverse]
+
+    --reverse: Swap the partition columns, moving each DN from
+        newRoutePartition back to routePartition (right column to left).
+        Useful for undoing a previous run.
 
 The script is interactive and will prompt for:
     CUCM JSON File (cucm-info.json): path to the JSON file with server/login
@@ -34,6 +38,7 @@ pattern, routePartition, newRoutePartition
 
 from pathlib import Path
 from csv import reader
+import argparse
 import time
 import urllib3
 from general import serverSetup, loggerSetup
@@ -68,36 +73,40 @@ def move_dn_partition(pattern, route_partition_name, new_route_partition_name):
     return result
 
 
-def main():
+def main(reverse=False):
     """
     Menu to choose single DN or list
     """
     while True:
         input_type_csv = input('Use CSV?: (y/n)') or 'n'
         if str(input_type_csv) in ("Yes", "yes", "Y", "y"):
-            use_csv()
+            use_csv(reverse)
             break
         else:
-            single_dn()
+            single_dn(reverse)
             break
 
 
-def single_dn():
+def single_dn(reverse=False):
     """
     Move a single DN to a new Route Partition
     """
     pattern = input('Pattern: ')
     route_partition_name = input('Current Route Partition Name: ')
     new_route_partition_name = input('New Route Partition Name: ')
+    if reverse:
+        route_partition_name, new_route_partition_name = new_route_partition_name, route_partition_name
     move_dn_partition(pattern, route_partition_name, new_route_partition_name)
 
 
-def use_csv():
+def use_csv(reverse=False):
     """
     Bulk Move DNs from CSV
     """
     print('\nCSV Must have header row and must contain only 1 DN per row')
     print('Field Order: pattern, routePartition, newRoutePartition')
+    if reverse:
+        print('--reverse enabled: moving DNs from newRoutePartition back to routePartition')
     input_file = input('Enter CSV file name or full path: ') or 'mv_dnPartitions.csv'
     with open(input_file, 'r', encoding='utf8') as my_file:
         csv_file = reader(my_file)
@@ -106,10 +115,17 @@ def use_csv():
             pattern = row[0]
             route_partition_name = row[1]
             new_route_partition_name = row[2]
+            if reverse:
+                route_partition_name, new_route_partition_name = new_route_partition_name, route_partition_name
             move_dn_partition(pattern, route_partition_name, new_route_partition_name)
 
 
 if __name__ == '__main__':
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Move existing Directory Numbers to a different Route Partition.')
+    parser.add_argument('--reverse', action='store_true', help='Swap partition columns, moving DNs from newRoutePartition back to routePartition')
+    args = parser.parse_args()
+
     # Set current working directory to basepath
     basepath = Path.cwd()
 
@@ -129,4 +145,4 @@ if __name__ == '__main__':
     axl = AXL(username=username,password=password,wsdl=wsdl,cucm=cucm,cucm_version=version)
 
     # Calling the main function
-    main()
+    main(reverse=args.reverse)

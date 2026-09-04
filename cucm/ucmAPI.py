@@ -238,6 +238,101 @@ class AXL(object):
         return result
     
     
+    def add_Route_Pattern(self,
+                      pattern='',
+                      description='',
+                      routePartitionName='',
+                      gatewayRouteList='',
+                      blockEnable=False,
+                      useCallingPartyPhoneMask='Default',
+                      dialPlanName=None,
+                      digitDiscardInstructionName=None,
+                      networkLocation='OnNet',
+                      prefixDigitsOut=None,
+                      routeFilterName=None):
+        """
+        Add a route pattern
+        :param pattern: Route pattern digit string
+        :param description: Route pattern description
+        :param routePartitionName: Name of the route partition to place the pattern in
+        :param gatewayRouteList: Name of the route list (gateway destination) for the pattern
+        :param blockEnable: Block this pattern
+        :param useCallingPartyPhoneMask: 'Default', 'On', or 'Off'
+        :param dialPlanName: Dial plan name (mandatory for patterns with @)
+        :param digitDiscardInstructionName: Digit discard instruction name
+        :param networkLocation: 'OnNet' or 'OffNet'
+        :param prefixDigitsOut: Digits to prefix on the outbound call
+        :param routeFilterName: Route filter name
+        :return: result dictionary
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+
+        request = {
+                'pattern': pattern,
+                'description': description,
+                'routePartitionName': routePartitionName,
+                'blockEnable': blockEnable,
+                'useCallingPartyPhoneMask': useCallingPartyPhoneMask,
+                'dialPlanName': dialPlanName,
+                'digitDiscardInstructionName': digitDiscardInstructionName,
+                'networkLocation': networkLocation,
+                'prefixDigitsOut': prefixDigitsOut,
+                'routeFilterName': routeFilterName,
+                'destination': {'routeListName': gatewayRouteList}
+        }
+
+        try:
+            self.service.addRoutePattern(request)
+            result['success'] = True
+            result['response'] = f'Route Pattern successfully added: {pattern}'
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        result = serialize_object(result)
+        return result
+
+
+    def remove_Route_Pattern(self,
+                      pattern='',
+                      routePartitionName='',
+                      dialPlanName=None,
+                      routeFilterName=None):
+        """
+        Remove a route pattern
+        :param pattern: Route pattern digit string
+        :param routePartitionName: Name of the route partition the pattern is in
+        :param dialPlanName: Dial plan name (mandatory for patterns with @)
+        :param routeFilterName: Route filter name
+        :return: result dictionary
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+
+        request = {
+                'pattern': pattern,
+                'routePartitionName': routePartitionName,
+                'dialPlanName': dialPlanName,
+                'routeFilterName': routeFilterName,
+        }
+
+        try:
+            self.service.removeRoutePattern(**request)
+            result['success'] = True
+            result['response'] = f'Route Pattern successfully removed: {pattern}'
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        result = serialize_object(result)
+        return result
+
+
     def add_Route_Partition(self,
                       name='',
                       description='',
