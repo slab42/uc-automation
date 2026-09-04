@@ -150,3 +150,6 @@ logs/
 
 # Any settings ini files:
 *.ini
+
+# Git creds:
+.git-credentials

@@ -8,14 +8,19 @@ CSV:
 dn, routePartition
 3120, Phone-Line1-PT
 
+The routePartition column is optional. If it is missing from the CSV
+header, the routePartition variable below is used for every row instead.
+
 """
 
 from pathlib import Path
-from csv import reader
+from csv import DictReader
 import time
 import urllib3
 from general import serverSetup, loggerSetup
 from ucmAPI import AXL
+
+routePartition = ''
 
 
 def main():
@@ -70,11 +75,11 @@ def use_csv():
     print('Field Order: dn, routePartition')
     input_file = input('Enter CSV file name or full path (default filename: rm_dnEnterpriseAltNumbers.csv): ') or 'rm_dnEnterpriseAltNumbers.csv'
     with open(input_file, 'r', encoding='utf8') as my_file:
-        csv_file = reader(my_file)
-        next(my_file)
+        csv_file = DictReader(my_file)
+        has_route_partition_col = 'routePartition' in (csv_file.fieldnames or [])
         for row in csv_file:
-            pattern = row[0]
-            route_partition_name = row[1]
+            pattern = row['dn']
+            route_partition_name = row['routePartition'] if has_route_partition_col else routePartition
             logger.info('Editing DN: ' + pattern + ', ' + route_partition_name)
             result = remove_enterpriseAltNum_line(pattern, route_partition_name)
 
