@@ -5,11 +5,13 @@ Script checks if the DN is valid.  If so then it removes Enterprise Alternate Nu
 Individually or from a list in CSV
 
 CSV:
-dn, routePartition
+pattern, routePartition
 3120, Phone-Line1-PT
 
-The routePartition column is optional. If it is missing from the CSV
-header, the routePartition variable below is used for every row instead.
+The CSV may contain additional columns; only the pattern and routePartition
+columns are used. The routePartition column is optional. If it is missing
+from the CSV header, the routePartition variable below is used for every row
+instead.
 
 """
 
@@ -71,15 +73,19 @@ def use_csv():
     """
     Bulk Import DNs from CSV
     """
-    print('\nCSV Must have header row and must contain only 1 pattern settings per row')
-    print('Field Order: dn, routePartition')
+    print('\nCSV Must have header row. Required columns: pattern (routePartition optional)')
+    print('Additional columns are allowed and will be ignored')
     input_file = input('Enter CSV file name or full path (default filename: rm_dnEnterpriseAltNumbers.csv): ') or 'rm_dnEnterpriseAltNumbers.csv'
     with open(input_file, 'r', encoding='utf8') as my_file:
         csv_file = DictReader(my_file)
+        has_pattern_col = 'pattern' in (csv_file.fieldnames or [])
         has_route_partition_col = 'routePartition' in (csv_file.fieldnames or [])
         for row in csv_file:
-            pattern = row['dn']
+            pattern = row['pattern'] if has_pattern_col else row.get('dn', '')
             route_partition_name = row['routePartition'] if has_route_partition_col else routePartition
+            if not pattern:
+                logger.error('Pattern column not found and no dn fallback available')
+                continue
             logger.info('Editing DN: ' + pattern + ', ' + route_partition_name)
             result = remove_enterpriseAltNum_line(pattern, route_partition_name)
 

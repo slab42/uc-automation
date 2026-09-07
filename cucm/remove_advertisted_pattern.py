@@ -28,10 +28,12 @@ CSV:
 pattern
 +155585944XX
 
+The CSV may contain additional columns; only the "pattern" column is used.
+
 """
 
 from pathlib import Path
-from csv import reader
+from csv import DictReader
 import time
 import urllib3
 from general import serverSetup, loggerSetup
@@ -91,10 +93,9 @@ def use_csv():
     print('Field Order: pattern')
     input_file = input('Enter CSV file name or full path: ') or 'rm_advertisedPatterns.csv'
     with open(input_file, 'r', encoding='utf8') as my_file:
-        csv_file = reader(my_file)
-        next(my_file)
+        csv_file = DictReader(my_file)
         for row in csv_file:
-            pattern = row[0]
+            pattern = row['pattern']
             remove_pattern(pattern)
 
 
