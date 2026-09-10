@@ -10,7 +10,7 @@ Tested with Python version 3.11.66
 1) CSV should be list of phone numbers, can be PSTN or extension:
 -Phone numbers must be existing in Control Hub
 
-phoneNumber
+pattern
 12704435531
 12704435532
 
@@ -25,7 +25,7 @@ __date__ = "2026/08/01"
 
 import requests
 import json
-from csv import reader
+from csv import DictReader
 #used for settings.ini file:
 import configparser
 import os
@@ -180,12 +180,18 @@ input_file = input('Enter CSV file name or full path: ')
 
 
 with open(input_file, 'r', encoding='utf-8-sig') as my_file:
-    csv_file = reader(my_file)
-    first_row = next(csv_file)
-    dprint(f'Headers are: {first_row}')
+    csv_file = DictReader(my_file)
+    dprint(f'Headers are: {csv_file.fieldnames}')
+
+    pattern_field = next((field for field in csv_file.fieldnames if 'pattern' in field.lower()), None)
+    if not pattern_field:
+        print("ERROR: No 'pattern' header found in CSV file.")
+        exit(1)
+
+    dprint(f'Using field "{pattern_field}" for phone numbers')
 
     for index, row in enumerate(csv_file, start=2):
-        phoneNumber = checkForData(row[0])
+        phoneNumber = checkForData(row[pattern_field])
         phoneNumberInfo = getPhoneNumber(phoneNumber)
         dprint(f'PhoneNumber entry is: {phoneNumber}')
 

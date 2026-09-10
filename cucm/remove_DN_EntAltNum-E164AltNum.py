@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
 """
-Script checks if the DN is valid.  If so then it removes Enterprise Alternate Number whether it is set or not.
+Script checks if the DN is valid. If so then it removes Enterprise Alternate Number
+and E.164 Alternate Number whether they are set or not.
 Individually or from a list in CSV
 
 CSV:
@@ -22,7 +23,7 @@ import urllib3
 from general import serverSetup, loggerSetup
 from ucmAPI import AXL
 
-routePartition = ''
+routePartition = 'Phone-Line1-PT'
 
 
 def main():
@@ -35,47 +36,56 @@ def main():
             use_csv()
             break
         else:
-            remove_Single_enterpriseAltNum_line()
+            remove_single_alt_num_line()
             break
 
 
-def remove_enterpriseAltNum_line(pattern, route_partition_name,):
-    """Update DN to remove Alternate Number
+def remove_alt_num_line(pattern, route_partition_name):
+    """Update DN to remove Alternate Numbers
     Args:
         pattern (string): Directory number
         route_partition_name (string): Partition
-    """    
-    line = axl.get_Line(pattern = pattern, routePartitionName = route_partition_name)
+    """
+    line = axl.get_Line(pattern=pattern, routePartitionName=route_partition_name)
     if line.get('success'):
         logger.info(f'{pattern} Good DN')
         enterpriseAltNum_updated = axl.update_Line(
-            pattern = pattern,
-            routePartitionName = route_partition_name,
-            enterpriseAltNum = {'numMask': None, 'isUrgent': None, 'addLocalRoutePartition': None, 'routePartition': None, 'advertiseGloballyIls': None})
+            pattern=pattern,
+            routePartitionName=route_partition_name,
+            enterpriseAltNum={'numMask': None, 'isUrgent': None, 'addLocalRoutePartition': None, 'routePartition': None, 'advertiseGloballyIls': None})
         if enterpriseAltNum_updated.get('success'):
-            logger.info(enterpriseAltNum_updated.get('response'))
+            logger.info(f'Enterprise Alternate Number removed: {enterpriseAltNum_updated.get("response")}')
         else:
-            logger.error(enterpriseAltNum_updated.get('error'))
+            logger.error(f'Enterprise Alternate Number removal failed: {enterpriseAltNum_updated.get("error")}')
+
+        e164AltNum_updated = axl.update_Line(
+            pattern=pattern,
+            routePartitionName=route_partition_name,
+            e164AltNum={'numMask': None, 'isUrgent': None, 'addLocalRoutePartition': None, 'routePartition': None, 'advertiseGloballyIls': None})
+        if e164AltNum_updated.get('success'):
+            logger.info(f'E.164 Alternate Number removed: {e164AltNum_updated.get("response")}')
+        else:
+            logger.error(f'E.164 Alternate Number removal failed: {e164AltNum_updated.get("error")}')
     else:
         logger.error(f'{pattern} in {route_partition_name} does not exist.')
 
 
-def remove_Single_enterpriseAltNum_line():
+def remove_single_alt_num_line():
     """
-    Update single DN to remove Alternate Number
-    """    
+    Update single DN to remove Alternate Numbers
+    """
     pattern = input('Pattern: ')
     route_partition_name = input('Route Partition Name: ')
-    remove_enterpriseAltNum_line(pattern, route_partition_name)
+    remove_alt_num_line(pattern, route_partition_name)
 
 
 def use_csv():
     """
-    Bulk Import DNs from CSV
+    Bulk Remove Alternate Numbers from DNs in CSV
     """
     print('\nCSV Must have header row. Required columns: pattern (routePartition optional)')
     print('Additional columns are allowed and will be ignored')
-    input_file = input('Enter CSV file name or full path (default filename: rm_dnEnterpriseAltNumbers.csv): ') or 'rm_dnEnterpriseAltNumbers.csv'
+    input_file = input('Enter CSV file name or full path (default filename: rm_dnAltNumbers.csv): ') or 'rm_dnAltNumbers.csv'
     with open(input_file, 'r', encoding='utf8') as my_file:
         csv_file = DictReader(my_file)
         has_pattern_col = 'pattern' in (csv_file.fieldnames or [])
@@ -87,7 +97,7 @@ def use_csv():
                 logger.error('Pattern column not found and no dn fallback available')
                 continue
             logger.info('Editing DN: ' + pattern + ', ' + route_partition_name)
-            result = remove_enterpriseAltNum_line(pattern, route_partition_name)
+            result = remove_alt_num_line(pattern, route_partition_name)
 
 
 if __name__ == '__main__':
@@ -99,9 +109,9 @@ if __name__ == '__main__':
     username, password, cucm, version = serverSetup(basepath / cucmInfoFile, 'username', 'password', 'server', 'version', 'non-api')
     if password == '':
         password = input('Enter CUCM Password for ' + username + ':')
-        
+
     # Setup Logging
-    logger = loggerSetup(basepath / 'logs' / (basepath / 'logs' / ('Remove_DN_AlternateNumber-' + cucm + '-' + (time.strftime("%Y_%m_%d-%H_%M_%S")) + '.log')))
+    logger = loggerSetup(basepath / 'logs' / (basepath / 'logs' / ('Remove_DN_AltNumbers-' + cucm + '-' + (time.strftime("%Y_%m_%d-%H_%M_%S")) + '.log')))
 
     # Setup AXL Connection to CUCM
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -111,6 +121,3 @@ if __name__ == '__main__':
 
     ### Calling the main function
     main()
-
-
-

@@ -95,6 +95,38 @@ class AXL(object):
         return result
 
 
+    def list_advertised_patterns(self):
+        """List all Advertised Patterns
+        :return: result dictionary with list of advertised patterns
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+        try:
+            fullResp = self.service.listAdvertisedPatterns(
+                searchCriteria={'pattern': '%'},
+                returnedTags={
+                    'description': True,
+                    'pattern': True,
+                    'patternType': True,
+                    'hostedRoutePSTNRule': True,
+                    'pstnFailStrip': True,
+                    'pstnFailPrepend': True
+                })
+            if fullResp['return'] == None:
+                resp = ''
+            else:
+                resp = fullResp['return']['advertisedPatterns']
+            result['success'] = True
+            result['response'] = resp
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        result = serialize_object(result)
+        return result
+
 
     def add_Calling_Search_Space(self,
                                  name,
@@ -1457,6 +1489,36 @@ class AXL(object):
                 resp = ''
             else:
                 resp = fullResp['return']['routePartition']
+            result['success'] = True
+            result['response'] = resp
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        result = serialize_object(result)
+        return result
+
+
+    def list_route_patterns(self):
+        """List all Route Patterns
+        :return: result dictionary with list of route patterns
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+        try:
+            fullResp = self.service.listRoutePattern(
+                searchCriteria={'pattern': '%'},
+                returnedTags={
+                    'description': True,
+                    'pattern': True,
+                    'routePartitionName': True,
+                })
+            if fullResp['return'] == None:
+                resp = ''
+            else:
+                resp = fullResp['return']['routePattern']
             result['success'] = True
             result['response'] = resp
         except Fault as error:
