@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+import warnings
+warnings.simplefilter('ignore')
+
 from pathlib import Path
 import logging
 from logging.handlers import RotatingFileHandler

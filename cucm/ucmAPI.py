@@ -128,6 +128,36 @@ class AXL(object):
         return result
 
 
+    def add_audio_codec_preference_list(self, name, codec_list, description=''):
+        """Add Audio Codec Preference List
+        :param name: Name of the codec preference list
+        :param codec_list: List of codecs in priority order
+        :param description: Description of the codec preference list
+        :return: result dictionary
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+
+        request = {
+            'name': name,
+            'description': description,
+            'codecsInList': {'codecNames': codec_list},
+        }
+
+        try:
+            self.service.addAudioCodecPreferenceList(request)
+            result['success'] = True
+            result['response'] = f'Audio Codec Preference List "{name}" added successfully'
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        result = serialize_object(result)
+        return result
+
+
     def add_Calling_Search_Space(self,
                                  name,
                                  description='',
@@ -513,10 +543,12 @@ class AXL(object):
         return result
 
 
-    def add_Region(self, region):
+    def add_Region(self, region, codec_preference_list='', max_audio_bit_rate=''):
         """
         Add a region
         :param region: Name of the region to add
+        :param codec_preference_list: Audio codec preference list name (optional)
+        :param max_audio_bit_rate: Maximum audio bit rate (optional)
         :return: result dictionary
         """
         result = {
@@ -526,6 +558,10 @@ class AXL(object):
         }
 
         request = {'name': region}
+        if codec_preference_list:
+            request['audioCodecPreferenceListName'] = codec_preference_list
+        if max_audio_bit_rate:
+            request['maxAudioBitRate'] = max_audio_bit_rate
 
         try:
             self.service.addRegion(request)
@@ -938,6 +974,29 @@ class AXL(object):
             self.service.removeDevicePool(name=name)
             result['success'] = True
             result['response'] = f'{name} Removed'
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        result = serialize_object(result)
+        return result
+
+
+    def update_Device_Pool(self, name, region_name):
+        """
+        Update Device Pool region
+        :param name: Device pool name
+        :param region_name: Region name to set
+        :return: result dictionary
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+        try:
+            self.service.updateDevicePool(name=name, regionName=region_name)
+            result['success'] = True
+            result['response'] = f'Device Pool {name} updated to use region {region_name}'
         except Fault as error:
             result['response'] = 'ERROR'
             result['error'] = error.message
