@@ -1,0 +1,12 @@
+{
+  "email": {
+    "mail_server": "mail.example.com",
+    "mail_port": 25,
+    "source_email": "cube-automation@example.com",
+    "destination_email": "alerts@example.com"
+  },
+
+  "router_memory_check": {
+    "low_memory_threshold": 33
+  }
+}
