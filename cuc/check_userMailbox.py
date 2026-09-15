@@ -168,13 +168,17 @@ def check_user_mailbox(http_session, cuc_server, extension, version):
         mailbox_response.raise_for_status()
 
         mailbox_root = etree.fromstring(mailbox_response.content)
-        mailbox_elem = mailbox_root.find('.//MailboxAttributes')
         mailbox = {}
-        if mailbox_elem is not None:
-            for child in mailbox_elem:
+        if mailbox_root.tag == 'MailboxAttributes':
+            for child in mailbox_root:
                 mailbox[child.tag] = child.text
+        else:
+            mailbox_elem = mailbox_root.find('.//MailboxAttributes')
+            if mailbox_elem is not None:
+                for child in mailbox_elem:
+                    mailbox[child.tag] = child.text
 
-        current_size_bytes = int(mailbox.get('CurrentSizeInBytes', 0))
+        current_size_bytes = int(mailbox.get('ByteSize', 0))
         current_size_mb = current_size_bytes / (1024 * 1024)
 
         warning_quota = int(mailbox.get('WarningQuota', 0))

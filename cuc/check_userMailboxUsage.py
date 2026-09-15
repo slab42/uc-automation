@@ -167,16 +167,21 @@ def get_user_mailbox_usage(http_session, cuc_server, extension, version):
         mailbox_response.raise_for_status()
 
         mailbox_root = etree.fromstring(mailbox_response.content)
-        mailbox_elem = mailbox_root.find('.//MailboxAttributes')
-        mailbox = {}
-        if mailbox_elem is not None:
-            for child in mailbox_elem:
-                mailbox[child.tag] = child.text
 
-        current_size_bytes = int(mailbox.get('CurrentSizeInBytes', 0))
+        mailbox = {}
+        if mailbox_root.tag == 'MailboxAttributes':
+            for child in mailbox_root:
+                mailbox[child.tag] = child.text
+        else:
+            mailbox_elem = mailbox_root.find('.//MailboxAttributes')
+            if mailbox_elem is not None:
+                for child in mailbox_elem:
+                    mailbox[child.tag] = child.text
+
+        current_size_bytes = int(mailbox.get('ByteSize', 0))
         current_size_mb = round(current_size_bytes / (1024 * 1024), 2)
 
-        logger.info(f'Retrieved mailbox usage for {user_alias} ({user_dtmf}): {current_size_mb} MB')
+        logger.info(f'Retrieved mailbox usage for {user_alias} ({user_dtmf}): {current_size_bytes} bytes, {current_size_mb} MB')
         return {'success': True, 'dtmfAccessId': user_dtmf, 'alias': user_alias, 'mailboxSize': current_size_mb, 'error': ''}
 
     except requests.exceptions.RequestException as e:
