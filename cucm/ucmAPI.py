@@ -1622,7 +1622,7 @@ class AXL(object):
         :return: result dictionary
         """
         resp = self.service.executeSQLUpdate(query)
-        
+
 
         result = {
             'success': False,
@@ -1640,4 +1640,32 @@ class AXL(object):
             result['response'] = resp
             result = serialize_object(result)
             return result
+
+    def execute_sql_query(self, query):
+        """
+        Execute SQL query and return results
+        :param query: SQL query to execute
+        :return: result dictionary with list of row dicts
+        """
+        result = {
+            'success': False,
+            'response': [],
+            'error': '',
+        }
+        try:
+            resp = self.service.executeSQLQuery(sql=query)
+            if resp['return'] == None or resp['return'].get('row') is None:
+                result['success'] = True
+                result['response'] = []
+            else:
+                rows = resp['return']['row']
+                if not isinstance(rows, list):
+                    rows = [rows]
+                result['success'] = True
+                result['response'] = rows
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        result = serialize_object(result)
+        return result
             
