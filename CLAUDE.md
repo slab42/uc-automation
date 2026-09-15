@@ -6,6 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 uc-automation is a collection of Python scripts for Unified Communications automation across on-premise (CUCM) and cloud (Webex) platforms. CUCM scripts use Cisco's AXL SOAP API via zeep; Webex scripts use REST APIs.
 
+## Hard Rules
+- ** Password visibility ** Anytime a script prompts for a password, it should never be displayed on screen.
+
 ## Directory Structure
 
 - **cucm/** - Cisco Unified Communications Manager automation scripts
