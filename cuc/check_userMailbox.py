@@ -61,13 +61,12 @@ def setup_logger(log_path):
     stdout_handler = logging.StreamHandler(sys.stdout)
     stdout_handler.setFormatter(message_format)
 
-    log_split = str(log_path).rsplit('/', 1)
-    path_exists = os.path.isdir(log_split[0])
-    if path_exists == False:
+    log_dir = Path(log_path).parent
+    if not log_dir.exists():
         try:
-            os.makedirs(log_split[0])
+            log_dir.mkdir(parents=True, exist_ok=True)
         except OSError as e:
-            print(f'Unable to create logging directory. Please check permissions\n {e}')
+            raise PermissionError(f'Unable to create logging directory {log_dir}: {e}')
 
     log_file_handler = RotatingFileHandler(log_path, maxBytes=500000, backupCount=5)
     log_file_handler.setFormatter(message_format)
@@ -299,7 +298,18 @@ if __name__ == '__main__':
     password = config.get('password')
     version = config.get('version', '15.0')
 
-    logger = setup_logger(basepath / 'logs' / (log_filename_prefix + cuc_server + '-' + time.strftime("%Y_%m_%d-%H_%M_%S") + '.log'))
+    log_path = basepath / 'logs' / (log_filename_prefix + cuc_server + '-' + time.strftime("%Y_%m_%d-%H_%M_%S") + '.log')
+    try:
+        logger = setup_logger(log_path)
+    except (OSError, PermissionError) as e:
+        print(f'Warning: Could not write logs to {log_path.parent}')
+        print(f'Using stdout-only logging: {e}\n')
+        logger = logging.getLogger('cuc_logger')
+        logger.setLevel(logging.DEBUG)
+        stdout_handler = logging.StreamHandler(sys.stdout)
+        message_format = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S")
+        stdout_handler.setFormatter(message_format)
+        logger.addHandler(stdout_handler)
 
     if password == '' or password is None:
         password = getpass.getpass(f'Enter CUC Password for {username}: ')
