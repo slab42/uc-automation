@@ -35,45 +35,21 @@ extension
 """
 
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from csv import reader
 import json
-import sys
 import time
 import requests
 import urllib3
 from requests.auth import HTTPBasicAuth
 import base64
-import logging
-from logging.handlers import RotatingFileHandler
-import os
 import getpass
 from lxml import etree
+from setup.on_prem.logger import setup_logger
 
 log_filename_prefix = 'check-userMailbox-'
-
-def setup_logger(log_path):
-    """Setup a custom logger to handle file and stdout logging."""
-    logger = logging.getLogger('cuc_logger')
-    logger.setLevel(logging.DEBUG)
-
-    message_format = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S")
-
-    stdout_handler = logging.StreamHandler(sys.stdout)
-    stdout_handler.setFormatter(message_format)
-
-    log_dir = Path(log_path).parent
-    if not log_dir.exists():
-        try:
-            log_dir.mkdir(parents=True, exist_ok=True)
-        except OSError as e:
-            raise PermissionError(f'Unable to create logging directory {log_dir}: {e}')
-
-    log_file_handler = RotatingFileHandler(log_path, maxBytes=500000, backupCount=5)
-    log_file_handler.setFormatter(message_format)
-
-    logger.addHandler(log_file_handler)
-    logger.addHandler(stdout_handler)
-    return logger
 
 
 def load_server_config(config_file):

@@ -35,7 +35,8 @@ except ImportError:
     print("ERROR: netmiko not installed. Install with: pip install netmiko")
     sys.exit(1)
 
-from cucm.general import loggerSetup, findFiles
+from cucm.general import findFiles
+from setup.on_prem.logger import setup_logger
 
 
 class ConfigParser:
@@ -372,7 +373,7 @@ def process_single_router(device_config, template_sections, logger):
 def main():
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     log_file = f"logs/{timestamp}-compare_router_config.log"
-    logger = loggerSetup(log_file)
+    logger = setup_logger(log_file)
 
     logger.info("Router Config Comparison - Started")
 

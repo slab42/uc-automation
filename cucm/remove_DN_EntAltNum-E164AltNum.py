@@ -17,10 +17,14 @@ instead.
 """
 
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from csv import DictReader
 import time
 import urllib3
-from general import serverSetup, loggerSetup
+from general import serverSetup
+from setup.on_prem.logger import setup_logger
 from ucmAPI import AXL
 
 routePartition = 'Phone-Line1-PT'
@@ -111,7 +115,7 @@ if __name__ == '__main__':
         password = input('Enter CUCM Password for ' + username + ':')
 
     # Setup Logging
-    logger = loggerSetup(basepath / 'logs' / (basepath / 'logs' / ('Remove_DN_AltNumbers-' + cucm + '-' + (time.strftime("%Y_%m_%d-%H_%M_%S")) + '.log')))
+    logger = setup_logger(basepath / 'logs' / ('Remove_DN_AltNumbers-' + cucm + '-' + (time.strftime("%Y_%m_%d-%H_%M_%S")) + '.log')))
 
     # Setup AXL Connection to CUCM
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)

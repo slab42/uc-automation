@@ -33,10 +33,14 @@ The CSV may contain additional columns; only the "pattern" column is used.
 """
 
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from csv import DictReader
 import time
 import urllib3
-from general import serverSetup, loggerSetup
+from general import serverSetup
+from setup.on_prem.logger import setup_logger
 from ucmAPI import AXL
 
 log_filename_prefix = 'Remove-Advertised-Pattern-'
@@ -110,7 +114,7 @@ if __name__ == '__main__':
         password = input('Enter CUCM Password for ' + username + ':')
 
     # Setup Logging
-    logger = loggerSetup(basepath / 'logs' / (basepath / 'logs' / (log_filename_prefix + cucm + '-' + (time.strftime("%Y_%m_%d-%H_%M_%S")) + '.log')))
+    logger = setup_logger(basepath / 'logs' / (log_filename_prefix + cucm + '-' + (time.strftime("%Y_%m_%d-%H_%M_%S")) + '.log')))
 
     # Setup AXL Connection to CUCM
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)

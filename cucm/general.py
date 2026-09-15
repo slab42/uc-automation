@@ -2,14 +2,8 @@
 import warnings
 warnings.simplefilter('ignore')
 
-from pathlib import Path
-import logging
-from logging.handlers import RotatingFileHandler
-from lxml import etree
-import sys
 import base64
 import json
-import os
 import requests
 from requests.adapters import HTTPAdapter
 import urllib3
@@ -30,46 +24,6 @@ def findFiles(searchPath, searchPattern):
     all_files = []
     all_files.extend(sorted(searchPath.glob(searchPattern)))
     return(all_files)
-
-
-def loggerSetup(logPath):
-    """Setup a custom logger to handle file and stdout logging.
-
-    Args:
-        logPath (string): Path to log file location.
-    
-    Returns:
-        logger fully setup
-    """
-    # Create Logger and Set Level
-    logger = logging.getLogger('my_logger')
-    logger.setLevel(logging.DEBUG)
-
-    # Set log message format
-    messageFormat = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S")
-    
-    # Create CLI log handler
-    stdoutHandler = logging.StreamHandler(sys.stdout)
-    stdoutHandler.setFormatter(messageFormat)
-    
-    ## Create log file handler
-    # Check if the need direcotry exists
-    logSplit = str(logPath).rsplit('/', 1)
-    # logSplit = str(logPath).rsplit('\\', 1)
-    path_exists = os.path.isdir(logSplit[0])
-    # If not Create log directory
-    if path_exists == False:
-        try:
-            os.makedirs(logSplit[0])
-        except OSError as e:
-            print(f'Unable to create logging directory. Please check permissions\n {e}')      
-    logFileHandler = RotatingFileHandler(logPath, maxBytes=500000, backupCount=5)
-    logFileHandler.setFormatter(messageFormat)
-    
-    # Output logs to CLI and File
-    logger.addHandler(logFileHandler)
-    logger.addHandler(stdoutHandler)
-    return(logger)
 
 
 def serverSetup(json_file, usernameField, passwordField, serverField, versionField, serverType):

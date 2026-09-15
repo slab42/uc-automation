@@ -23,11 +23,14 @@ For multiple clusters, create a clusters.csv file with cluster configurations.
 """
 
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from csv import reader
 import time
 import getpass
 import urllib3
-from general import loggerSetup
+from setup.on_prem.logger import setup_logger
 from ucmAPI import AXL
 
 log_filename_prefix = 'Create-Region-Update-DevicePools-'
@@ -114,7 +117,7 @@ def run_operation_on_cluster(basepath, cluster_data, operation_params, cluster_c
         password = cluster_credentials[cluster_name]['password']
 
         # Setup Logging
-        logger = loggerSetup(basepath / 'logs' / (log_filename_prefix + server + '-' + (time.strftime("%Y_%m_%d-%H_%M_%S")) + '.log'))
+        logger = setup_logger(basepath / 'logs' / (log_filename_prefix + server + '-' + (time.strftime("%Y_%m_%d-%H_%M_%S")) + '.log'))
 
         # Setup AXL Connection to CUCM
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -246,7 +249,7 @@ if __name__ == '__main__':
         username = input('Username: ')
         password = getpass.getpass('Password: ')
 
-        logger = loggerSetup(basepath / 'logs' / (log_filename_prefix + server + '-' + (time.strftime("%Y_%m_%d-%H_%M_%S")) + '.log'))
+        logger = setup_logger(basepath / 'logs' / (log_filename_prefix + server + '-' + (time.strftime("%Y_%m_%d-%H_%M_%S")) + '.log'))
 
         wsdl_dir = basepath / 'schema' / version / 'AXLAPI.wsdl'
         wsdl = wsdl_dir.absolute().as_uri()

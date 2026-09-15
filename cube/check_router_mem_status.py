@@ -30,7 +30,8 @@ except ImportError:
     print("ERROR: netmiko not installed. Install with: pip install netmiko")
     sys.exit(1)
 
-from cucm.general import loggerSetup, findFiles
+from cucm.general import findFiles
+from setup.on_prem.logger import setup_logger
 
 
 def extract_memory_section(output):
@@ -152,7 +153,7 @@ def check_router_status(device_config, logger):
 def main():
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     log_file = f"logs/{timestamp}-check_router_status.log"
-    logger = loggerSetup(log_file)
+    logger = setup_logger(log_file)
 
     logger.info("Router Status Check - Started")
 
