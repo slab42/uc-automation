@@ -11,8 +11,8 @@ from pathlib import Path
 class EnvironmentConfig:
     """Loads and manages customer configuration."""
 
-    def __init__(self, config_path="customer_env.json"):
-        """Initialize environment config. Looks for customer_env.json in project root."""
+    def __init__(self, config_path=".env/customer_env.json"):
+        """Initialize environment config. Looks for customer_env.json in .env folder."""
         self.config_path = Path(__file__).parent.parent / config_path
         self.config = self._load_config()
 
