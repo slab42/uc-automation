@@ -856,6 +856,7 @@ class AXL(object):
                         'protocol': '',
                         'description': '',
                         'locationName': '',
+                        'devicePoolName': '',
                         'ownerUserName' : ''
                     })['return']['phone']
             result['success'] = True

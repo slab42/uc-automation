@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+import warnings
+warnings.filterwarnings('ignore', category=Warning, module='urllib3')
+
 """
 Count phones (devices) in CUCM grouped by Device Pool.
 
@@ -13,12 +16,17 @@ The script is interactive and will prompt for:
     Include Analog Devices?: (y/n): choose 'y' to include analog access
         devices in the count, or 'n' (default) to exclude them.
 
+The script retrieves all phones from CUCM via AXL API, groups them by device
+pool, and optionally filters out analog devices and CTI ports before counting.
+
 Output is displayed on screen and logged to logs/<timestamp>-count_phones_by_device_pool.log
 
-Analog devices are filtered by device class. Excluded types include:
+When excluding analog devices, the script filters out:
+    - Products containing 'Analog' in the name
     - Analog Access
     - Analog Phone
-    - Any device with class containing 'Analog'
+    - Gateway Endpoint Analog Access
+    - Products containing 'CTI' in the name (CTI ports, CTI OS ports)
 
 """
 
@@ -28,6 +36,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import time
 import urllib3
+import csv
 from general import serverSetup
 from setup.logger import setup_logger
 from ucmAPI import AXL
@@ -38,53 +47,76 @@ log_filename_prefix = 'count-phones-by-device-pool-'
 def count_phones_by_pool(axl, logger, include_analog=False):
     """
     Query CUCM for phone counts grouped by device pool.
+    Uses AXL API to retrieve all phones and groups by device pool.
 
     Args:
         axl: AXL client instance
         logger: logger instance
-        include_analog: if True, include analog devices; if False, exclude them
+        include_analog: if True, include analog and CTI devices; if False, exclude them
     """
     logger.info('=' * 70)
     logger.info('Retrieving phone counts by Device Pool')
 
-    # Build SQL query to count devices by device pool
-    sql_query = """
-        SELECT dp.name as device_pool, COUNT(*) as phone_count
-        FROM device d
-        JOIN devicepool dp ON d.fkdevicepool = dp.pkid
-        WHERE d.tkclass NOT IN ('VirtualDevice', 'ConfiguredDevice', 'Messaging')
-    """
-
-    # Add analog filter if requested
-    if not include_analog:
-        sql_query += """
-        AND d.tkclass NOT IN (
-            'GatewayEndpointAnalogAccess',
-            'AnalogPhone',
-            'AnalogAccessDevice'
-        )
-        AND d.tkmodel NOT LIKE '%Analog%'
-        """
-
-    sql_query += " GROUP BY dp.name ORDER BY dp.name"
-
-    logger.debug('Executing SQL query: %s', sql_query.replace('\n', ' '))
-
-    result = axl.execute_sql_query(sql_query)
-    if not result.get('success'):
-        logger.error('Failed to retrieve phone counts: %s', result.get('error'))
+    # Get all phones from CUCM
+    logger.debug('Fetching all phones from CUCM...')
+    phones_result = axl.list_Phone()
+    if not phones_result.get('success'):
+        logger.error('Failed to retrieve phones: %s', phones_result.get('error'))
         return None
 
-    rows = result.get('response', [])
-    if not rows:
-        logger.warning('No devices found in any device pools')
+    phones = phones_result.get('response', [])
+    if not phones:
+        logger.warning('No phones found in CUCM')
         return []
 
-    # Convert single row to list if needed
-    if not isinstance(rows, list):
-        rows = [rows]
+    # Convert single phone to list if needed
+    if not isinstance(phones, list):
+        phones = [phones]
 
-    logger.info('Successfully retrieved phone count data from %d device pools', len(rows))
+    logger.info('Retrieved %d total phones from CUCM', len(phones))
+
+    # Group phones by device pool and count
+    pool_counts = {}
+    excluded_analog = 0
+
+    for phone in phones:
+        # Get device pool (may be missing for some devices)
+        pool_name = phone.get('devicePoolName')
+
+        # Handle OrderedDict response from zeep
+        if pool_name and hasattr(pool_name, 'get'):
+            pool_name = pool_name.get('_value_1') or str(pool_name)
+
+        # Convert to string if not already
+        if pool_name:
+            pool_name = str(pool_name)
+        else:
+            pool_name = 'Unknown/Unassigned'
+
+        # Check if device is analog or CTI port (by product/class)
+        product = str(phone.get('product', '')).lower()
+        is_analog = ('analog' in product or 'cti' in product or
+                    product in ('gatewayendpointanalogaccess', 'analogphone', 'analogaccessdevice'))
+
+        if is_analog and not include_analog:
+            excluded_analog += 1
+            logger.debug('Excluding analog/CTI device: %s (product: %s)',
+                        phone.get('name'), phone.get('product'))
+            continue
+
+        # Count this phone
+        if pool_name not in pool_counts:
+            pool_counts[pool_name] = 0
+        pool_counts[pool_name] += 1
+
+    # Convert to list of dicts and sort by pool name
+    rows = [{'device_pool': pool, 'phone_count': count}
+            for pool, count in sorted(pool_counts.items())]
+
+    if excluded_analog > 0:
+        logger.info('Excluded %d analog/CTI devices from count', excluded_analog)
+
+    logger.info('Successfully grouped phones into %d device pools', len(rows))
     return rows
 
 
@@ -104,9 +136,9 @@ def display_results(rows, logger, include_analog=False):
     print('\n')
     print('=' * 70)
     if include_analog:
-        print('Phone Count by Device Pool (Including Analog Devices)')
+        print('Phone Count by Device Pool (Including Analog & CTI Devices)')
     else:
-        print('Phone Count by Device Pool (Analog Devices Excluded)')
+        print('Phone Count by Device Pool (Analog & CTI Devices Excluded)')
     print('=' * 70)
     print(f'{"Device Pool Name":<40} {"Phone Count":>15}')
     print('-' * 70)
@@ -114,9 +146,9 @@ def display_results(rows, logger, include_analog=False):
     # Log header
     logger.info('=' * 70)
     if include_analog:
-        logger.info('Phone Count by Device Pool (Including Analog Devices)')
+        logger.info('Phone Count by Device Pool (Including Analog & CTI Devices)')
     else:
-        logger.info('Phone Count by Device Pool (Analog Devices Excluded)')
+        logger.info('Phone Count by Device Pool (Analog & CTI Devices Excluded)')
     logger.info('=' * 70)
     logger.info('%-40s %15s', 'Device Pool Name', 'Phone Count')
     logger.info('-' * 70)
@@ -143,6 +175,49 @@ def display_results(rows, logger, include_analog=False):
     logger.info('Phone count operation completed successfully')
 
 
+def write_results_to_csv(rows, filepath, logger, include_analog=False):
+    """
+    Write phone count results to CSV file.
+
+    Args:
+        rows: list of result dicts with 'device_pool' and 'phone_count' keys
+        filepath: path to write CSV file
+        logger: logger instance
+        include_analog: whether analog/CTI devices were included in the count
+    """
+    try:
+        with open(filepath, 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+
+            # Write header with filter info
+            filter_status = 'Including Analog & CTI Devices' if include_analog else 'Excluding Analog & CTI Devices'
+            writer.writerow(['Phone Count by Device Pool'])
+            writer.writerow([f'Filter: {filter_status}'])
+            writer.writerow([f'Generated: {time.strftime("%Y-%m-%d %H:%M:%S")}'])
+            writer.writerow([])  # Blank row
+
+            # Write column headers
+            writer.writerow(['Device Pool Name', 'Phone Count'])
+
+            # Write data rows
+            total_phones = 0
+            for row in rows:
+                pool_name = row.get('device_pool', '')
+                phone_count = int(row.get('phone_count', 0))
+                total_phones += phone_count
+                writer.writerow([pool_name, phone_count])
+
+            # Write total row
+            writer.writerow([])  # Blank row
+            writer.writerow(['TOTAL', total_phones])
+
+        logger.info('Results saved to CSV: %s', filepath)
+        print(f'\nResults saved to: {filepath}')
+    except Exception as e:
+        logger.error('Failed to write CSV file: %s', str(e))
+        print(f'Error saving CSV: {e}')
+
+
 if __name__ == '__main__':
     # Set current working directory to basepath
     basepath = Path.cwd()
@@ -164,9 +239,9 @@ if __name__ == '__main__':
 
     logger.info('Connected to CUCM: %s (version %s)', cucm, version)
 
-    # Ask whether to include analog devices
-    include_analog_input = input('Include Analog Devices?: (y/n) ') or 'n'
-    include_analog = include_analog_input.lower() in ('y', 'yes')
+    # Ask whether to skip analog devices and CTI ports
+    skip_analog_input = input('Skip analog devices and CTI ports?: (y/n) ') or 'y'
+    include_analog = skip_analog_input.lower() not in ('y', 'yes')
 
     # Get phone counts
     rows = count_phones_by_pool(axl, logger, include_analog=include_analog)
@@ -174,3 +249,10 @@ if __name__ == '__main__':
     # Display results
     if rows is not None:
         display_results(rows, logger, include_analog=include_analog)
+
+        # Ask whether to save to CSV
+        save_csv_input = input('\nSave results to CSV?: (y/n) ') or 'n'
+        if save_csv_input.lower() in ('y', 'yes'):
+            csv_filename = f'phone-count-{cucm}-{time.strftime("%Y_%m_%d-%H_%M_%S")}.csv'
+            csv_filepath = basepath / csv_filename
+            write_results_to_csv(rows, csv_filepath, logger, include_analog=include_analog)
