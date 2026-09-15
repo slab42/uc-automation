@@ -37,7 +37,7 @@ from requests.auth import HTTPBasicAuth
 import logging
 from logging.handlers import StreamHandler
 import getpass
-from setup.on_prem.logger import setup_logger
+from setup.logger import setup_logger
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 

@@ -21,7 +21,7 @@ from csv import reader
 import time
 import urllib3
 from general import serverSetup
-from setup.on_prem.logger import setup_logger
+from setup.logger import setup_logger
 from ucmAPI import AXL
 
 log_filename_prefix = 'Add-Advertised-Pattern-'

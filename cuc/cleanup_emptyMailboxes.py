@@ -44,7 +44,7 @@ import logging
 from logging.handlers import StreamHandler
 import getpass
 from lxml import etree
-from setup.on_prem.logger import setup_logger
+from setup.logger import setup_logger
 
 log_filename_prefix = 'cleanup-emptyMailboxes-'
 

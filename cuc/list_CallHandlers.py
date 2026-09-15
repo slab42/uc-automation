@@ -35,7 +35,7 @@ from requests.auth import HTTPBasicAuth
 import urllib3
 from lxml import etree
 import csv
-from setup.on_prem.logger import setup_logger
+from setup.logger import setup_logger
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 

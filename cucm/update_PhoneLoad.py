@@ -26,7 +26,7 @@ import time
 import urllib3
 import getpass
 from general import serverSetup
-from setup.on_prem.logger import setup_logger
+from setup.logger import setup_logger
 from ucmAPI import AXL
 
 log_filename_prefix = 'Update-PhoneLoad-'

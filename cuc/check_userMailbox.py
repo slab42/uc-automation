@@ -47,7 +47,7 @@ from requests.auth import HTTPBasicAuth
 import base64
 import getpass
 from lxml import etree
-from setup.on_prem.logger import setup_logger
+from setup.logger import setup_logger
 
 log_filename_prefix = 'check-userMailbox-'
 

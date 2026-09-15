@@ -30,7 +30,7 @@ from csv import reader
 import time
 import getpass
 import urllib3
-from setup.on_prem.logger import setup_logger
+from setup.logger import setup_logger
 from ucmAPI import AXL
 
 log_filename_prefix = 'Create-Region-Update-DevicePools-'

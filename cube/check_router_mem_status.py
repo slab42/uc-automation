@@ -34,7 +34,7 @@ LOW_MEMORY_THRESHOLD = 33  # Alert when free memory is below this percentage
 
 # Add parent directory to path to import from cucm
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from setup.on_prem.logger import setup_logger
+from setup.logger import setup_logger
 
 try:
     from netmiko import ConnectHandler

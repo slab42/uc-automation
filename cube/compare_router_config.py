@@ -36,7 +36,7 @@ except ImportError:
     sys.exit(1)
 
 from cucm.general import findFiles
-from setup.on_prem.logger import setup_logger
+from setup.logger import setup_logger
 
 
 class ConfigParser:
