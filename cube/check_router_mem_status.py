@@ -23,18 +23,15 @@ from email.mime.multipart import MIMEMultipart
 from pathlib import Path
 from datetime import datetime
 
-# Email Configuration
-MAIL_SERVER = "mail.slab42.net"
-MAIL_PORT = 25
-SOURCE_EMAIL = "cube-mem-check@slab42.net"
-DESTINATION_EMAIL = "alerts@slab42.net"
+# SSH connection settings
+SSH_DEVICE_TYPE = 'cisco_ios'
+SSH_PORT = 22
+SSH_TIMEOUT = 15
 
-# Memory Threshold Configuration
-LOW_MEMORY_THRESHOLD = 33  # Alert when free memory is below this percentage
-
-# Add parent directory to path to import from cucm
+# Add parent directory to path to import from setup
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from setup.logger import setup_logger
+from setup.env_loader import EnvironmentConfig
 
 try:
     from netmiko import ConnectHandler
@@ -56,7 +53,6 @@ def extract_memory_section(output):
 
         if in_memory:
             memory_section.append(line)
-            # Stop after we've captured a reasonable amount (memory table is usually ~5-6 lines)
             if memory_section and len(memory_section) > 1 and line.strip() and not line[0].isspace():
                 if 'Memory' not in line:
                     memory_section.pop()
@@ -70,10 +66,8 @@ def extract_free_percentage(output):
     lines = output.split('\n')
 
     for line in lines:
-        # Look for lines with Free (Pct) data (e.g., "1250232 (32%)")
         if 'RP0' in line or 'RP1' in line:
             parts = line.split()
-            # Find all percentages in the line
             percentages = []
             for part in parts:
                 if part.endswith('%)') and '(' in part:
@@ -82,7 +76,6 @@ def extract_free_percentage(output):
                         percentages.append(int(pct_str))
                     except ValueError:
                         continue
-            # Free (Pct) is the second percentage (Used, Free, Committed order)
             if len(percentages) >= 2:
                 return percentages[1]
 
@@ -99,8 +92,6 @@ def read_csv_routers(csv_path):
                 print("ERROR: CSV file is empty")
                 return None
 
-            # Search for expected columns (case-insensitive)
-            fieldnames_lower = [h.lower() for h in reader.fieldnames]
             ip_col = next((h for h in reader.fieldnames if h.lower() in ['router_ip', 'ip', 'address']), None)
             host_col = next((h for h in reader.fieldnames if h.lower() in ['hostname', 'name', 'router_name']), None)
 
@@ -123,10 +114,9 @@ def read_csv_routers(csv_path):
         return None
 
 
-def send_summary_email(results, timestamp, logger):
+def send_summary_email(results, timestamp, logger, email_cfg, low_memory_threshold):
     """Send a summary email with router check results."""
     try:
-        # Build email body
         body = f"Router Memory Status Check - {timestamp}\n"
         body += "=" * 80 + "\n\n"
 
@@ -135,26 +125,24 @@ def send_summary_email(results, timestamp, logger):
 
         for result in results:
             status = "✓ SUCCESS" if result['success'] else "✗ FAILED"
-            highlight = " ⚠️ LOW FREE MEMORY" if result['success'] and result['free_pct'] < LOW_MEMORY_THRESHOLD else ""
+            highlight = " ⚠️ LOW FREE MEMORY" if result['success'] and result['free_pct'] < low_memory_threshold else ""
             body += f"{status} - {result['hostname']} ({result['ip']}){highlight}\n"
             if result['success']:
                 body += f"  Memory Info: {result['memory']}\n"
             body += "\n"
 
-        # Create MIME message
         msg = MIMEMultipart()
-        msg['From'] = SOURCE_EMAIL
-        msg['To'] = DESTINATION_EMAIL
+        msg['From'] = email_cfg['source_email']
+        msg['To'] = email_cfg['destination_email']
         msg['Subject'] = f"Router Memory Status Check - {timestamp}"
         msg.attach(MIMEText(body, 'plain'))
 
-        # Send email
-        server = smtplib.SMTP(MAIL_SERVER, MAIL_PORT)
+        server = smtplib.SMTP(email_cfg['mail_server'], email_cfg['mail_port'])
         server.send_message(msg)
         server.quit()
 
-        logger.info(f"Summary email sent to {DESTINATION_EMAIL}")
-        print(f"✓ Summary email sent to {DESTINATION_EMAIL}")
+        logger.info(f"Summary email sent to {email_cfg['destination_email']}")
+        print(f"✓ Summary email sent to {email_cfg['destination_email']}")
         return True
     except Exception as e:
         logger.error(f"Failed to send summary email: {e}")
@@ -172,7 +160,6 @@ def check_router_status(device_config, logger):
     print(f"Router: {hostname} ({router_ip})")
     print(f"{'='*80}")
 
-    # Extract only netmiko-compatible parameters
     netmiko_params = {k: v for k, v in device_config.items() if k not in ['ip', 'hostname']}
 
     try:
@@ -204,14 +191,16 @@ def main():
     log_file = f"logs/{timestamp}-check_router_status.log"
     logger = setup_logger(log_file)
 
+    env_config = EnvironmentConfig()
+    email_cfg = env_config.get_email_config()
+    low_memory_threshold = env_config.get_memory_threshold()
+
     logger.info("Router Status Check - Started")
 
-    # Prompt for CSV file
     csv_input = input("Enter path to CSV file (routers): ").strip()
     if not csv_input:
         csv_input = "routers.csv"
 
-    # Read routers from CSV
     routers = read_csv_routers(csv_input)
     if not routers:
         logger.error("No routers found in CSV file")
@@ -222,26 +211,23 @@ def main():
     for r in routers:
         print(f"  - {r['hostname']} ({r['ip']})")
 
-    # Prompt for credentials
     print("\n" + "="*80)
     username = input("Enter SSH username: ").strip()
     password = getpass.getpass("Enter SSH password: ")
 
-    # Build device configurations
     devices = []
     for router in routers:
         devices.append({
-            'device_type': 'cisco_ios',
+            'device_type': SSH_DEVICE_TYPE,
             'host': router['ip'],
             'username': username,
             'password': password,
-            'port': 22,
-            'timeout': 15,
+            'port': SSH_PORT,
+            'timeout': SSH_TIMEOUT,
             'ip': router['ip'],
             'hostname': router['hostname']
         })
 
-    # Connect to each router and run command
     print("\n" + "="*80)
     print("Executing commands...")
     print("="*80)
@@ -260,25 +246,20 @@ def main():
             'free_pct': free_pct
         })
 
-    # Summary
     print("\n" + "="*80)
     print("Summary")
     print("="*80)
     successful = sum(1 for r in results if r['success'])
     print(f"Successful: {successful}/{len(results)}\n")
 
-    # Separate low memory routers from normal ones
-    low_memory = [r for r in results if r['success'] and r['free_pct'] < LOW_MEMORY_THRESHOLD]
-    normal_memory = [r for r in results if not (r['success'] and r['free_pct'] < LOW_MEMORY_THRESHOLD)]
+    low_memory = [r for r in results if r['success'] and r['free_pct'] < low_memory_threshold]
+    normal_memory = [r for r in results if not (r['success'] and r['free_pct'] < low_memory_threshold)]
 
-    # Print low memory routers first
     for result in low_memory:
-        status = "✓"
-        print(f"{status} {result['hostname']} ({result['ip']}) ⚠️ LOW FREE MEMORY")
+        print(f"✓ {result['hostname']} ({result['ip']}) ⚠️ LOW FREE MEMORY")
         print(f"  {result['memory']}")
         print()
 
-    # Print normal routers
     for result in normal_memory:
         status = "✓" if result['success'] else "✗"
         print(f"{status} {result['hostname']} ({result['ip']})")
@@ -288,11 +269,10 @@ def main():
 
     logger.info(f"Router Status Check - Completed ({successful}/{len(results)} successful)")
 
-    # Send summary email
     print("\n" + "="*80)
     send_email = input("Send summary email? (y/n): ").strip().lower()
     if send_email == 'y':
-        send_summary_email(results, timestamp, logger)
+        send_summary_email(results, timestamp, logger, email_cfg, low_memory_threshold)
 
 
 if __name__ == "__main__":
