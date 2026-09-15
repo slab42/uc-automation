@@ -21,7 +21,7 @@ The script is interactive and will prompt for:
 
     If 'y' (CSV):
         Enter CSV file name or full path: path to the CSV file
-            (default: check_userMailboxUsage.csv)
+            (default: mailboxes.csv)
         Output file name (default: mailbox_usage_report.csv): path to output CSV file
 
 CSV Input Format:
@@ -208,7 +208,7 @@ def use_csv():
     """Export mailbox usage for multiple users from a CSV file."""
     print('\nCSV must have a header row and contain one extension per row')
     print('Field: extension')
-    input_file = input('Enter CSV file name or full path: ') or 'check_userMailboxUsage.csv'
+    input_file = input('Enter CSV file name or full path: ') or 'mailboxes.csv'
     output_file = input('Output file name (default: mailbox_usage_report.csv): ') or 'mailbox_usage_report.csv'
 
     try:

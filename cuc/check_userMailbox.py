@@ -25,7 +25,7 @@ The script is interactive and will prompt for:
 
     If 'y' (CSV):
         Enter CSV file name or full path: path to the CSV file
-            (default: check_userMailbox.csv)
+            (default: mailboxes.csv)
 
 CSV Format:
 extension
@@ -249,7 +249,7 @@ def use_csv():
     """Check mailboxes for multiple users from a CSV file."""
     print('\nCSV must have a header row and contain one extension per row')
     print('Field: extension')
-    input_file = input('Enter CSV file name or full path: ') or 'check_userMailbox.csv'
+    input_file = input('Enter CSV file name or full path: ') or 'mailboxes.csv'
 
     try:
         with open(input_file, 'r', encoding='utf8') as my_file:
