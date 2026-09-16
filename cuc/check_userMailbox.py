@@ -45,7 +45,12 @@ from requests.auth import HTTPBasicAuth
 from datetime import datetime
 from lxml import etree
 from setup.logger import setup_logger
-from setup.multi_object_loader import get_object_for_single_operation, load_credentials
+from setup.multi_object_loader import (
+    get_object_for_single_operation,
+    load_credentials,
+    get_objects_for_multi_operation,
+    load_credentials_for_multi_objects
+)
 
 log_filename_prefix = 'check-userMailbox-'
 
@@ -193,7 +198,7 @@ def check_user_mailbox(http_session, cuc_server, extension, version):
         return {'success': False, 'response': '', 'error': error_msg}
 
 
-def single_user():
+def run_single_user(http_session, cuc_server, version, logger):
     """Check mailbox for a single user by extension."""
     extension = input('Extension: ')
     result = check_user_mailbox(http_session, cuc_server, extension, version)
@@ -203,14 +208,13 @@ def single_user():
         print(f"Error: {result.get('error')}")
 
 
-def use_csv():
+def run_csv_file(http_session, cuc_server, version, logger, csv_file_path):
     """Check mailboxes for multiple users from a CSV file."""
     print('\nCSV must have a header row and contain one extension per row')
     print('Field: extension')
-    input_file = input('Enter CSV file name or full path: ') or 'mailboxes.csv'
 
     try:
-        with open(input_file, 'r', encoding='utf8') as my_file:
+        with open(csv_file_path, 'r', encoding='utf8') as my_file:
             csv_file = reader(my_file)
             next(my_file)
             row_count = 0
@@ -226,20 +230,67 @@ def use_csv():
                             print(f"Error for extension {extension}: {result.get('error')}")
             logger.info(f'Processed {row_count} users from CSV')
     except FileNotFoundError:
-        logger.error(f'CSV file not found: {input_file}')
-        print(f'Error: CSV file not found: {input_file}')
+        logger.error(f'CSV file not found: {csv_file_path}')
+        print(f'Error: CSV file not found: {csv_file_path}')
 
 
-def main():
-    """Menu to choose single user or CSV list."""
-    while True:
-        input_type_csv = input('Use CSV?: (y/n) ') or 'n'
-        if str(input_type_csv) in ("Yes", "yes", "Y", "y"):
-            use_csv()
-            break
+def run_operation_on_cluster(cluster_data, operation_params, cluster_credentials, logger):
+    """Run mailbox check on a single cluster."""
+    try:
+        cluster_name = cluster_data['name']
+        server = cluster_data['server']
+        version = cluster_data['version']
+
+        username, password = cluster_credentials[cluster_name]
+
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        http_session = requests.Session()
+        http_session.auth = HTTPBasicAuth(username, password)
+        http_session.headers.update({'Content-Type': 'application/json'})
+
+        logger.info('=' * 60)
+        logger.info('Processing cluster: %s (%s)', cluster_name, server)
+        logger.info('=' * 60)
+
+        op_type = operation_params.get('type')
+        if op_type == 'csv':
+            run_csv_file(http_session, server, version, logger, operation_params['csv_file'])
+        else:  # single
+            run_single_user(http_session, server, version, logger)
+
+        logger.info('Completed cluster: %s', cluster_name)
+        print(f"✓ Completed {cluster_name} ({server})")
+        return True
+    except Exception as e:
+        print(f"✗ Failed on {cluster_name}: {str(e)}")
+        logger.error(f"Exception on cluster {cluster_name}: {str(e)}")
+        return False
+
+
+def run_on_all_clusters(clusters_data, operation_params, logger):
+    """Run mailbox check on all clusters sequentially."""
+    print(f"\nProcessing {len(clusters_data)} clusters...\n")
+
+    print("="*80)
+    print("Loading Credentials")
+    print("="*80)
+    use_same = input('Use same credentials for all clusters? (y/n) [default: y]: ').strip().lower()
+    use_same = use_same in ('', 'y', 'yes')
+
+    cluster_credentials = load_credentials_for_multi_objects('CUC', clusters_data, use_same=use_same)
+
+    successful = 0
+    failed = 0
+
+    for cluster in clusters_data:
+        if run_operation_on_cluster(cluster, operation_params, cluster_credentials, logger):
+            successful += 1
         else:
-            single_user()
-            break
+            failed += 1
+
+    print(f"\n{'=' * 60}")
+    print(f"Completed: {successful} successful, {failed} failed")
+    print(f"{'=' * 60}")
 
 
 if __name__ == '__main__':
@@ -247,31 +298,76 @@ if __name__ == '__main__':
 
     basepath = Path.cwd()
 
-    # Load cluster information from clusters.csv or interactive input
-    cluster = get_object_for_single_operation(basepath, 'CUC')
-    if not cluster:
-        print("Error: Unable to load cluster information")
-        sys.exit(1)
-
-    # Load credentials from credentials.env
-    username, password = load_credentials('CUC', cluster['name'])
-
-    cuc_server = cluster['server']
-    version = cluster['version']
-
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    log_file = f"../_logs/{timestamp}-check-usermailbox-{cuc_server}.log"
+    log_file = f"../_logs/{timestamp}-check-usermailbox.log"
     logger = setup_logger(log_file)
     logger.info("Check User Mailbox - Started")
 
-    logger.info(f'Starting check_userMailbox for server: {cuc_server} (version: {version})')
-    extension_field = get_extension_field(version)
-    logger.info(f'Using field: {extension_field} for extension lookup')
+    clusters_data = get_objects_for_multi_operation(basepath, 'CUC')
+    if clusters_data:
+        response = input(f'{len(clusters_data)} clusters found. Use multiple clusters?: (y/n) ') or 'n'
+        if response.lower() in ('y', 'yes'):
+            # Gather operation parameters for multi-cluster
+            input_type_csv = input('Use CSV?: (y/n) ') or 'n'
+            if str(input_type_csv) in ("Yes", "yes", "Y", "y"):
+                print('\nCSV must have a header row and contain one extension per row')
+                print('Field: extension')
+                csv_file = input('Enter CSV file name or full path: ') or 'mailboxes.csv'
+                operation_params = {'type': 'csv', 'csv_file': csv_file}
+            else:
+                operation_params = {'type': 'single'}
+            run_on_all_clusters(clusters_data, operation_params, logger)
+        else:
+            cluster = get_object_for_single_operation(basepath, 'CUC')
+            if not cluster:
+                print("Error: Unable to load cluster information")
+                sys.exit(1)
 
-    http_session = requests.Session()
-    http_session.auth = HTTPBasicAuth(username, password)
-    http_session.headers.update({'Content-Type': 'application/json'})
+            username, password = load_credentials('CUC', cluster['name'])
+            cuc_server = cluster['server']
+            version = cluster['version']
 
-    main()
+            logger.info(f'Starting check_userMailbox for server: {cuc_server} (version: {version})')
+            extension_field = get_extension_field(version)
+            logger.info(f'Using field: {extension_field} for extension lookup')
+
+            http_session = requests.Session()
+            http_session.auth = HTTPBasicAuth(username, password)
+            http_session.headers.update({'Content-Type': 'application/json'})
+
+            input_type_csv = input('Use CSV?: (y/n) ') or 'n'
+            if str(input_type_csv) in ("Yes", "yes", "Y", "y"):
+                print('\nCSV must have a header row and contain one extension per row')
+                print('Field: extension')
+                csv_file = input('Enter CSV file name or full path: ') or 'mailboxes.csv'
+                run_csv_file(http_session, cuc_server, version, logger, csv_file)
+            else:
+                run_single_user(http_session, cuc_server, version, logger)
+    else:
+        cluster = get_object_for_single_operation(basepath, 'CUC')
+        if not cluster:
+            print("Error: Unable to load cluster information")
+            sys.exit(1)
+
+        username, password = load_credentials('CUC', cluster['name'])
+        cuc_server = cluster['server']
+        version = cluster['version']
+
+        logger.info(f'Starting check_userMailbox for server: {cuc_server} (version: {version})')
+        extension_field = get_extension_field(version)
+        logger.info(f'Using field: {extension_field} for extension lookup')
+
+        http_session = requests.Session()
+        http_session.auth = HTTPBasicAuth(username, password)
+        http_session.headers.update({'Content-Type': 'application/json'})
+
+        input_type_csv = input('Use CSV?: (y/n) ') or 'n'
+        if str(input_type_csv) in ("Yes", "yes", "Y", "y"):
+            print('\nCSV must have a header row and contain one extension per row')
+            print('Field: extension')
+            csv_file = input('Enter CSV file name or full path: ') or 'mailboxes.csv'
+            run_csv_file(http_session, cuc_server, version, logger, csv_file)
+        else:
+            run_single_user(http_session, cuc_server, version, logger)
 
     logger.info('Script completed')

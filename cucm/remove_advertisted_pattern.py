@@ -38,11 +38,16 @@ from csv import DictReader
 from datetime import datetime
 import urllib3
 from setup.logger import setup_logger
-from setup.multi_object_loader import get_object_for_single_operation, load_credentials
+from setup.multi_object_loader import (
+    get_object_for_single_operation,
+    load_credentials,
+    get_objects_for_multi_operation,
+    load_credentials_for_multi_objects
+)
 from ucmAPI import AXL
 
 
-def remove_pattern(pattern):
+def remove_pattern(axl, logger, pattern):
     """
     Remove an Advertised Pattern. If removal fails and the pattern
     does not already start with '+', retry with a '+' prefix.
@@ -64,68 +69,150 @@ def remove_pattern(pattern):
     return result
 
 
-def main():
-    """
-    Menu to choose single pattern or list
-    """
-    while True:
-        input_type_csv = input('Use CSV?: (y/n)') or 'n'
-        if str(input_type_csv) in ("Yes", "yes", "Y", "y"):
-            use_csv()
-            break
-        else:
-            single_pattern()
-            break
-
-
-def single_pattern():
+def run_single_pattern(axl, logger):
     """
     Remove a single Advertised Pattern
     """
     pattern = input('Pattern: ')
-    remove_pattern(pattern)
+    remove_pattern(axl, logger, pattern)
 
 
-def use_csv():
+def run_csv_file(axl, logger, csv_file_path):
     """
     Bulk Remove Patterns from CSV
     """
     print('\nCSV Must have header row and must contain only 1 pattern per row')
     print('Field Order: pattern')
-    input_file = input('Enter CSV file name or full path: ') or 'rm_advertisedPatterns.csv'
-    with open(input_file, 'r', encoding='utf8') as my_file:
+    with open(csv_file_path, 'r', encoding='utf8') as my_file:
         csv_file = DictReader(my_file)
         for row in csv_file:
             pattern = row['pattern']
-            remove_pattern(pattern)
+            remove_pattern(axl, logger, pattern)
+
+
+def run_operation_on_cluster(basepath, cluster_data, operation_params, cluster_credentials, logger):
+    """Run pattern removal on a single cluster."""
+    try:
+        cluster_name = cluster_data['name']
+        server = cluster_data['server']
+        version = cluster_data['version']
+
+        username, password = cluster_credentials[cluster_name]
+
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        wsdl_dir = basepath / 'schema' / version / 'AXLAPI.wsdl'
+        wsdl = wsdl_dir.absolute().as_uri()
+        axl = AXL(username=username, password=password, wsdl=wsdl, cucm=server, cucm_version=version)
+
+        logger.info('=' * 60)
+        logger.info('Processing cluster: %s (%s)', cluster_name, server)
+        logger.info('=' * 60)
+
+        op_type = operation_params.get('type')
+        if op_type == 'csv':
+            run_csv_file(axl, logger, operation_params['csv_file'])
+        else:  # single
+            run_single_pattern(axl, logger)
+
+        logger.info('Completed cluster: %s', cluster_name)
+        print(f"✓ Completed {cluster_name} ({server})")
+        return True
+    except Exception as e:
+        print(f"✗ Failed on {cluster_name}: {str(e)}")
+        logger.error(f"Exception on cluster {cluster_name}: {str(e)}")
+        return False
+
+
+def run_on_all_clusters(basepath, clusters_data, operation_params, logger):
+    """Run pattern removal on all clusters sequentially."""
+    print(f"\nProcessing {len(clusters_data)} clusters...\n")
+
+    print("="*80)
+    print("Loading Credentials")
+    print("="*80)
+    use_same = input('Use same credentials for all clusters? (y/n) [default: y]: ').strip().lower()
+    use_same = use_same in ('', 'y', 'yes')
+
+    cluster_credentials = load_credentials_for_multi_objects('CUCM', clusters_data, use_same=use_same)
+
+    successful = 0
+    failed = 0
+
+    for cluster in clusters_data:
+        if run_operation_on_cluster(basepath, cluster, operation_params, cluster_credentials, logger):
+            successful += 1
+        else:
+            failed += 1
+
+    print(f"\n{'=' * 60}")
+    print(f"Completed: {successful} successful, {failed} failed")
+    print(f"{'=' * 60}")
 
 
 if __name__ == '__main__':
     basepath = Path.cwd()
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-    # Load cluster information
-    cluster = get_object_for_single_operation(basepath, 'CUCM')
-    if not cluster:
-        print("Error: Unable to load cluster information")
-        sys.exit(1)
-
-    # Load credentials
-    username, password = load_credentials('CUCM', cluster['name'])
-
-    cucm = cluster['server']
-    version = cluster['version']
-
-    # Setup Logging
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    log_file = f"../_logs/{timestamp}-remove-advertisted-pattern-{cucm}.log"
+    log_file = f"../_logs/{timestamp}-remove-advertisted-pattern.log"
     logger = setup_logger(log_file)
     logger.info("Remove Advertisted Pattern - Started")
 
-    # Setup AXL Connection to CUCM
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-    wsdlPath = basepath / 'schema' / version / 'AXLAPI.wsdl'
-    wsdl = wsdlPath.absolute().as_uri()
-    axl = AXL(username=username, password=password, wsdl=wsdl, cucm=cucm, cucm_version=version)
+    clusters_data = get_objects_for_multi_operation(basepath, 'CUCM')
+    if clusters_data:
+        response = input(f'{len(clusters_data)} clusters found. Use multiple clusters?: (y/n) ') or 'n'
+        if response.lower() in ('y', 'yes'):
+            # Gather operation parameters for multi-cluster
+            input_type_csv = input('Use CSV?: (y/n)') or 'n'
+            if str(input_type_csv) in ("Yes", "yes", "Y", "y"):
+                print('\nCSV Must have header row and must contain only 1 pattern per row')
+                print('Field Order: pattern')
+                csv_file = input('Enter CSV file name or full path: ') or 'rm_advertisedPatterns.csv'
+                operation_params = {'type': 'csv', 'csv_file': csv_file}
+            else:
+                operation_params = {'type': 'single'}
+            run_on_all_clusters(basepath, clusters_data, operation_params, logger)
+        else:
+            cluster = get_object_for_single_operation(basepath, 'CUCM')
+            if not cluster:
+                print("Error: Unable to load cluster information")
+                sys.exit(1)
 
-    # Calling the main function
-    main()
+            username, password = load_credentials('CUCM', cluster['name'])
+            server = cluster['server']
+            version = cluster['version']
+
+            wsdl_dir = basepath / 'schema' / version / 'AXLAPI.wsdl'
+            wsdl = wsdl_dir.absolute().as_uri()
+            axl = AXL(username=username, password=password, wsdl=wsdl, cucm=server, cucm_version=version)
+
+            input_type_csv = input('Use CSV?: (y/n)') or 'n'
+            if str(input_type_csv) in ("Yes", "yes", "Y", "y"):
+                print('\nCSV Must have header row and must contain only 1 pattern per row')
+                print('Field Order: pattern')
+                csv_file = input('Enter CSV file name or full path: ') or 'rm_advertisedPatterns.csv'
+                run_csv_file(axl, logger, csv_file)
+            else:
+                run_single_pattern(axl, logger)
+    else:
+        cluster = get_object_for_single_operation(basepath, 'CUCM')
+        if not cluster:
+            print("Error: Unable to load cluster information")
+            sys.exit(1)
+
+        username, password = load_credentials('CUCM', cluster['name'])
+        server = cluster['server']
+        version = cluster['version']
+
+        wsdl_dir = basepath / 'schema' / version / 'AXLAPI.wsdl'
+        wsdl = wsdl_dir.absolute().as_uri()
+        axl = AXL(username=username, password=password, wsdl=wsdl, cucm=server, cucm_version=version)
+
+        input_type_csv = input('Use CSV?: (y/n)') or 'n'
+        if str(input_type_csv) in ("Yes", "yes", "Y", "y"):
+            print('\nCSV Must have header row and must contain only 1 pattern per row')
+            print('Field Order: pattern')
+            csv_file = input('Enter CSV file name or full path: ') or 'rm_advertisedPatterns.csv'
+            run_csv_file(axl, logger, csv_file)
+        else:
+            run_single_pattern(axl, logger)
