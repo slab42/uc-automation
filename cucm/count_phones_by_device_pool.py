@@ -222,6 +222,10 @@ if __name__ == '__main__':
     # Set current working directory to basepath
     basepath = Path.cwd()
 
+    # Create logs directory if it doesn't exist
+    logs_dir = basepath / 'logs'
+    logs_dir.mkdir(exist_ok=True)
+
     # Get server and login credentials
     cucmInfoFile = input('CUCM JSON File (cucm-info.json): ') or 'cucm-info.json'
     username, password, cucm, version = serverSetup(basepath / cucmInfoFile, 'username', 'password', 'server', 'version', 'non-api')
