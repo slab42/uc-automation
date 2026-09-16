@@ -25,13 +25,13 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from csv import reader
+from datetime import datetime
 import time
 import getpass
 import urllib3
 from setup.logger import setup_logger
 from ucmAPI import AXL
 
-log_filename_prefix = 'Create-Audio-Codec-Preference-List-'
 
 def process_csv_file(axl, logger, csv_file):
     """Process codecs from CSV file"""
@@ -81,11 +81,11 @@ def interactive_csv_mode(axl, logger):
     print('\nCSV must have header row: name, description, codec1, codec2, codec3, ...')
     print('Field Format: name, description, codec1, codec2, codec3, ...')
     print('Description can be empty. Codec order matters - first codec has highest priority')
-    csv_file = input('Enter CSV file name or full path: ') or 'audioCodecPreferenceLists.csv'
+    csv_file = input('Enter CSV file name or full path [_DATA/audioCodecPreferenceLists.csv]: ') or '../_DATA/audioCodecPreferenceLists.csv'
     process_csv_file(axl, logger, csv_file)
 
 
-def run_operation_on_cluster(basepath, cluster_data, operation_params, cluster_credentials):
+def run_operation_on_cluster(basepath, cluster_data, operation_params, cluster_credentials, logger):
     """Run the codec preference operation on a single cluster"""
     try:
         cluster_name = cluster_data['cluster_name']
@@ -94,9 +94,6 @@ def run_operation_on_cluster(basepath, cluster_data, operation_params, cluster_c
 
         username = cluster_credentials[cluster_name]['username']
         password = cluster_credentials[cluster_name]['password']
-
-        # Setup Logging
-        logger = setup_logger(basepath / 'logs' / (log_filename_prefix + server + '-' + (time.strftime("%Y_%m_%d-%H_%M_%S")) + '.log'))
 
         # Setup AXL Connection to CUCM
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -122,7 +119,7 @@ def run_operation_on_cluster(basepath, cluster_data, operation_params, cluster_c
         return False
 
 
-def run_on_all_clusters(basepath, clusters_data, operation_params):
+def run_on_all_clusters(basepath, clusters_data, operation_params, logger):
     """Run operation on all clusters sequentially"""
     print(f"\nProcessing {len(clusters_data)} clusters...\n")
 
@@ -148,7 +145,7 @@ def run_on_all_clusters(basepath, clusters_data, operation_params):
     failed = 0
 
     for cluster in clusters_data:
-        if run_operation_on_cluster(basepath, cluster, operation_params, cluster_credentials):
+        if run_operation_on_cluster(basepath, cluster, operation_params, cluster_credentials, logger):
             successful += 1
         else:
             failed += 1
@@ -187,7 +184,13 @@ if __name__ == '__main__':
     basepath = Path.cwd()
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-    clusters_file = basepath / 'clusters.csv'
+    # Setup Logging
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    log_file = f"../_logs/{timestamp}-create-audio-codec-preference-list.log"
+    logger = setup_logger(log_file)
+    logger.info("Create Audio Codec Preference List - Started")
+
+    clusters_file = basepath.parent / '_DATA' / 'clusters.csv'
     use_multiple = False
 
     if clusters_file.exists():
@@ -205,7 +208,7 @@ if __name__ == '__main__':
         csv_mode_response = input('Use CSV for Codec List?: (y/n) ') or 'n'
 
         if csv_mode_response.lower() in ('y', 'yes'):
-            csv_file = input('Enter CSV file name or full path: ') or 'audioCodecPreferenceLists.csv'
+            csv_file = input('Enter CSV file name or full path [_DATA/audioCodecPreferenceLists.csv]: ') or str(basepath.parent / '_DATA' / 'audioCodecPreferenceLists.csv')
             operation_params = {'type': 'csv', 'csv_file': csv_file}
         else:
             name = input('Codec Preference List Name: ')
@@ -214,7 +217,7 @@ if __name__ == '__main__':
             codec_list = [codec.strip() for codec in codec_input.split(',')]
             operation_params = {'type': 'single', 'name': name, 'description': description, 'codec_list': codec_list}
 
-        run_on_all_clusters(basepath, clusters_data, operation_params)
+        run_on_all_clusters(basepath, clusters_data, operation_params, logger)
 
     else:
         # Single cluster mode
@@ -223,8 +226,6 @@ if __name__ == '__main__':
 
         username = input('Username: ')
         password = getpass.getpass('Password: ')
-
-        logger = setup_logger(basepath / 'logs' / (log_filename_prefix + server + '-' + (time.strftime("%Y_%m_%d-%H_%M_%S")) + '.log'))
 
         wsdl_dir = basepath / 'schema' / version / 'AXLAPI.wsdl'
         wsdl = wsdl_dir.absolute().as_uri()

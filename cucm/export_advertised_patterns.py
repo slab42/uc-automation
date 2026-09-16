@@ -16,13 +16,13 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from csv import DictWriter
+from datetime import datetime
 import time
 import urllib3
 from general import serverSetup
 from setup.logger import setup_logger
 from ucmAPI import AXL
 
-log_filename_prefix = 'Export-Advertised-Patterns-'
 
 
 def export_patterns_to_csv(patterns):
@@ -75,7 +75,10 @@ if __name__ == '__main__':
         password = input('Enter CUCM Password for ' + username + ':')
 
     # Setup Logging
-    logger = setup_logger(basepath / 'logs' / (log_filename_prefix + cucm + '-' + (time.strftime("%Y_%m_%d-%H_%M_%S")) + '.log')))
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    log_file = f"../_logs/{timestamp}-export-advertised-patterns-{cucm}.log"
+    logger = setup_logger(log_file)
+    logger.info("Export Advertised Patterns - Started")
 
     # Setup AXL Connection to CUCM
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)

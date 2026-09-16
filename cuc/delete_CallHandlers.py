@@ -144,18 +144,10 @@ def main():
 
     global logger
     basepath = Path(__file__).parent
-    log_path = basepath / 'logs' / (log_filename_prefix + cuc_server + '-' + time.strftime("%Y_%m_%d-%H_%M_%S") + '.log')
-    try:
-        logger = setup_logger(log_path)
-    except (OSError, PermissionError) as e:
-        print(f'Warning: Could not write logs to {log_path.parent}')
-        print(f'Using stdout-only logging: {e}\n')
-        logger = logging.getLogger('cuc_logger')
-        logger.setLevel(logging.DEBUG)
-        stdout_handler = logging.StreamHandler(sys.stdout)
-        message_format = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S")
-        stdout_handler.setFormatter(message_format)
-        logger.addHandler(stdout_handler)
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    log_file = f"../_logs/{timestamp}-delete-callhandlers-{cuc_server}.log"
+    logger = setup_logger(log_file)
+    logger.info("Delete Call Handlers - Started")
 
     prompt_deletes = input('Prompt for deletes?: (y/n) ').strip().lower() == 'y'
     csv_file = input('Input CSV file name (callhandlers.csv): ').strip() or 'callhandlers.csv'

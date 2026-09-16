@@ -27,13 +27,13 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from csv import reader
+from datetime import datetime
 import time
 import getpass
 import urllib3
 from setup.logger import setup_logger
 from ucmAPI import AXL
 
-log_filename_prefix = 'Create-Region-Update-DevicePools-'
 
 
 def process_csv_file(axl, logger, csv_file):
@@ -106,7 +106,7 @@ def process_region(axl, logger, region_name, codec_pref_list, max_audio_bit_rate
     return True
 
 
-def run_operation_on_cluster(basepath, cluster_data, operation_params, cluster_credentials):
+def run_operation_on_cluster(basepath, cluster_data, operation_params, cluster_credentials, logger):
     """Run the region creation operation on a single cluster"""
     try:
         cluster_name = cluster_data['cluster_name']
@@ -115,9 +115,6 @@ def run_operation_on_cluster(basepath, cluster_data, operation_params, cluster_c
 
         username = cluster_credentials[cluster_name]['username']
         password = cluster_credentials[cluster_name]['password']
-
-        # Setup Logging
-        logger = setup_logger(basepath / 'logs' / (log_filename_prefix + server + '-' + (time.strftime("%Y_%m_%d-%H_%M_%S")) + '.log'))
 
         # Setup AXL Connection to CUCM
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -143,7 +140,7 @@ def run_operation_on_cluster(basepath, cluster_data, operation_params, cluster_c
         return False
 
 
-def run_on_all_clusters(basepath, clusters_data, operation_params):
+def run_on_all_clusters(basepath, clusters_data, operation_params, logger):
     """Run operation on all clusters sequentially"""
     print(f"\nProcessing {len(clusters_data)} clusters...\n")
 
@@ -169,7 +166,7 @@ def run_on_all_clusters(basepath, clusters_data, operation_params):
     failed = 0
 
     for cluster in clusters_data:
-        if run_operation_on_cluster(basepath, cluster, operation_params, cluster_credentials):
+        if run_operation_on_cluster(basepath, cluster, operation_params, cluster_credentials, logger):
             successful += 1
         else:
             failed += 1
@@ -208,7 +205,13 @@ if __name__ == '__main__':
     basepath = Path.cwd()
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-    clusters_file = basepath / 'clusters.csv'
+    # Setup Logging
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    log_file = f"../_logs/{timestamp}-create-region-update-device-pools.log"
+    logger = setup_logger(log_file)
+    logger.info("Create Region Update Device Pools - Started")
+
+    clusters_file = basepath.parent / '_DATA' / 'clusters.csv'
     use_multiple = False
 
     if clusters_file.exists():
@@ -226,7 +229,7 @@ if __name__ == '__main__':
         csv_mode_response = input('Use CSV?: (y/n) ') or 'n'
 
         if csv_mode_response.lower() in ('y', 'yes'):
-            csv_file = input('Enter CSV file name or full path: ') or 'createRegions.csv'
+            csv_file = input('Enter CSV file name or full path [_DATA/createRegions.csv]: ') or str(basepath.parent / '_DATA' / 'createRegions.csv')
             operation_params = {'type': 'csv', 'csv_file': csv_file}
         else:
             region_name = input('Region Name: ')
@@ -239,7 +242,7 @@ if __name__ == '__main__':
                 'max_audio_bit_rate': max_audio_bit_rate
             }
 
-        run_on_all_clusters(basepath, clusters_data, operation_params)
+        run_on_all_clusters(basepath, clusters_data, operation_params, logger)
 
     else:
         # Single cluster mode
@@ -249,15 +252,13 @@ if __name__ == '__main__':
         username = input('Username: ')
         password = getpass.getpass('Password: ')
 
-        logger = setup_logger(basepath / 'logs' / (log_filename_prefix + server + '-' + (time.strftime("%Y_%m_%d-%H_%M_%S")) + '.log'))
-
         wsdl_dir = basepath / 'schema' / version / 'AXLAPI.wsdl'
         wsdl = wsdl_dir.absolute().as_uri()
         axl = AXL(username=username, password=password, wsdl=wsdl, cucm=server, cucm_version=version)
 
         input_type_csv = input('Use CSV?: (y/n) ') or 'n'
         if input_type_csv.lower() in ('y', 'yes'):
-            csv_file = input('Enter CSV file name or full path: ') or 'createRegions.csv'
+            csv_file = input('Enter CSV file name or full path [_DATA/createRegions.csv]: ') or str(basepath.parent / '_DATA' / 'createRegions.csv')
             process_csv_file(axl, logger, csv_file)
         else:
             region_name = input('Region Name: ')

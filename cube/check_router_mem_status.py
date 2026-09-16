@@ -196,7 +196,7 @@ def check_router_status(device_config, logger):
 
 def main():
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    log_file = f"logs/{timestamp}-check_router_status.log"
+    log_file = f"../_logs/{timestamp}-check_router_status.log"
     logger = setup_logger(log_file)
 
     env_config = EnvironmentConfig()
@@ -207,9 +207,9 @@ def main():
 
     # Step 1: Read router list from CSV
     print("\n" + "="*80)
-    csv_input = input("Enter path to CSV file [routers.csv]: ").strip()
+    csv_input = input("Enter path to CSV file [_DATA/routers.csv]: ").strip()
     if not csv_input:
-        csv_input = "routers.csv"
+        csv_input = "../_DATA/routers.csv"
 
     routers = read_csv_routers(csv_input)
     if not routers:

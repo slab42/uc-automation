@@ -19,13 +19,13 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from csv import DictWriter
+from datetime import datetime
 import time
 import urllib3
 from general import serverSetup
 from setup.logger import setup_logger
 from ucmAPI import AXL
 
-log_filename_prefix = 'Compare-AdvP-RP-'
 
 
 def extract_last_ten_digits(pattern):
@@ -154,7 +154,10 @@ if __name__ == '__main__':
         password = input('Enter CUCM Password for ' + username + ':')
 
     # Setup Logging
-    logger = setup_logger(basepath / 'logs' / (log_filename_prefix + cucm + '-' + (time.strftime("%Y_%m_%d-%H_%M_%S")) + '.log'))
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    log_file = f"../_logs/{timestamp}-compare-advp-rp-{cucm}.log"
+    logger = setup_logger(log_file)
+    logger.info("Compare Advp Rp - Started")
 
     # Setup AXL Connection to CUCM
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)

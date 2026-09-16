@@ -34,6 +34,7 @@ from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from datetime import datetime
 import time
 import urllib3
 import csv
@@ -41,7 +42,6 @@ from general import serverSetup
 from setup.logger import setup_logger
 from ucmAPI import AXL
 
-log_filename_prefix = 'count-phones-by-device-pool-'
 
 
 def count_phones_by_pool(axl, logger, include_analog=False):
@@ -222,35 +222,17 @@ if __name__ == '__main__':
     # Set current working directory to basepath
     basepath = Path.cwd()
 
-    # Create logs directory if it doesn't exist
-    logs_dir = basepath / 'logs'
-    try:
-        logs_dir.mkdir(exist_ok=True)
-        log_path = logs_dir / (log_filename_prefix + 'temp.log')
-        log_path.touch()  # Test write permissions
-        log_path.unlink()  # Clean up test file
-        log_location = logs_dir
-    except (OSError, PermissionError):
-        # Fall back to script directory if logs directory isn't writable
-        print('Warning: logs directory is not writable, saving to script directory')
-        log_location = basepath
-
     # Get server and login credentials
     cucmInfoFile = input('CUCM JSON File (cucm-info.json): ') or 'cucm-info.json'
     username, password, cucm, version = serverSetup(basepath / cucmInfoFile, 'username', 'password', 'server', 'version', 'non-api')
     if password == '':
         password = input(f'Enter CUCM Password for {username}: ')
 
-    # Setup Logging - with fallback if permissions fail
-    try:
-        logger = setup_logger(log_location / (log_filename_prefix + cucm + '-' + (time.strftime("%Y_%m_%d-%H_%M_%S")) + '.log'))
-    except PermissionError:
-        # If logging to the preferred location fails, use script directory
-        if log_location != basepath:
-            print('Warning: Could not write to logs directory, saving to script directory instead')
-            logger = setup_logger(basepath / (log_filename_prefix + cucm + '-' + (time.strftime("%Y_%m_%d-%H_%M_%S")) + '.log'))
-        else:
-            raise
+    # Setup Logging
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    log_file = f"../_logs/{timestamp}-count-phones-by-device-pool-{cucm}.log"
+    logger = setup_logger(log_file)
+    logger.info("Count Phones By Device Pool - Started")
 
     # Setup AXL Connection to CUCM
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)

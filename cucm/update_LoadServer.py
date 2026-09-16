@@ -24,6 +24,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from csv import DictReader
+from datetime import datetime
 import time
 import urllib3
 import getpass
@@ -32,7 +33,6 @@ from general import serverSetup
 from setup.logger import setup_logger
 from ucmAPI import AXL
 
-log_filename_prefix = 'Update-LoadServer-'
 
 loadServerAddress = 'cloudupgrader.webex.com'
 
@@ -151,7 +151,10 @@ if __name__ == '__main__':
         password = getpass.getpass('Enter CUCM Password for ' + username + ':')
 
     # Setup Logging
-    logger = setup_logger(basepath / 'logs' / (log_filename_prefix + cucm + '-' + time.strftime("%Y_%m_%d-%H_%M_%S") + '.log'))
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    log_file = f"../_logs/{timestamp}-update-load-server-{cucm}.log"
+    logger = setup_logger(log_file)
+    logger.info("Update Load Server - Started")
 
     # Setup AXL Connection to CUCM
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)

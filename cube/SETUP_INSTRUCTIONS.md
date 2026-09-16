@@ -12,6 +12,10 @@ The `check_router_mem_status.py` script now uses credentials.env for credential 
 
 ### Step 1: Create/Update routers.csv
 
+The routers.csv file is located in the central **_DATA** folder.
+
+Location: `_DATA/routers.csv`
+
 CSV format (headers are searched by name):
 ```csv
 router_ip,hostname
@@ -21,6 +25,8 @@ router_ip,hostname
 
 Keys searched: `router_ip`, `ip`, `address` (for IP)
 Keys searched: `hostname`, `name`, `router_name` (for hostname)
+
+Note: Edit `_DATA/routers.csv`, not the old `cube/routers.csv` location.
 
 ### Step 2: Add Credentials to credentials.env
 
@@ -152,19 +158,24 @@ Script uses stored password without prompting. Not recommended for production.
 
 ### "CSV file not found"
 
-1. Check file exists:
+1. Check file exists in _DATA:
    ```bash
-   ls -la routers.csv
+   ls -la _DATA/routers.csv
    ```
 
-2. Check file in correct directory (same as script or specify path):
+2. If file doesn't exist, copy from examples:
    ```bash
-   ls -la cube/routers.csv
+   cp _DATA/examples/router_config_template.EXAMPLE _DATA/routers.csv
    ```
 
-3. Use full path if needed:
+3. Edit with actual router IPs and hostnames:
+   ```bash
+   # Edit _DATA/routers.csv and add your routers
    ```
-   Enter path to CSV file [routers.csv]: /path/to/routers.csv
+
+4. Use custom path if needed:
+   ```
+   Enter path to CSV file [_DATA/routers.csv]: /custom/path/routers.csv
    ```
 
 ### "CSV must contain 'router_ip' and 'hostname' columns"
@@ -221,12 +232,13 @@ password=
 - Graceful fallback to prompting
 
 ### Main Function Flow
-1. Prompt for CSV file path (default: routers.csv)
+1. Prompt for CSV file path (default: `_DATA/routers.csv`)
 2. Read routers from CSV (IP + hostname)
 3. Ask credential mode (1=single, 2=per-router)
 4. Load credentials from credentials.env
-5. Execute commands
-6. Display results and email option
+5. Execute commands on routers
+6. Display results
+7. Option to send summary email
 
 ## Next Steps
 

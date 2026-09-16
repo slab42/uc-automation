@@ -372,7 +372,7 @@ def process_single_router(device_config, template_sections, logger):
 
 def main():
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    log_file = f"logs/{timestamp}-compare_router_config.log"
+    log_file = f"../_logs/{timestamp}-compare_router_config.log"
     logger = setup_logger(log_file)
 
     logger.info("Router Config Comparison - Started")
@@ -420,9 +420,9 @@ def main():
         else:
             logger.error("Single router comparison failed")
     else:
-        csv_input = input("Enter path to CSV file [default: routers.csv]: ").strip()
+        csv_input = input("Enter path to CSV file [default: _DATA/routers.csv]: ").strip()
         if not csv_input:
-            csv_input = "routers.csv"
+            csv_input = "../_DATA/routers.csv"
 
         routers = read_csv_routers(csv_input)
         if not routers:
