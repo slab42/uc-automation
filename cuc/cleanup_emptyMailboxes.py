@@ -81,7 +81,7 @@ def get_user_mailbox_usage(http_session, cuc_server, extension):
 
         logger.debug(f'Querying mailbox usage for extension: {extension}')
 
-        users_url = f'{base_url}/users/?query=*'
+        users_url = f'{base_url}/users/?query=(DtmfAccessId is {extension})'
         users_response = http_session.get(users_url, verify=False)
         users_response.raise_for_status()
 
