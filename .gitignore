@@ -153,3 +153,6 @@ logs/
 
 # Git creds:
 .git-credentials
+
+# Variable Files for Scripts .var
+*.var
