@@ -154,5 +154,6 @@ logs/
 # Git creds:
 .git-credentials
 
-# Variable Files for Scripts .var
-.var
+# Variable Files for Scripts (files ending in .var, but track .var/ directory)
+*.var
+!.var/
