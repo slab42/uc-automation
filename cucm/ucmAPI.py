@@ -629,7 +629,82 @@ class AXL(object):
             result['error'] = error.message
         result = serialize_object(result)
         return result
-    
+
+
+    def debug_get_phone(self, device_name):
+        """
+        Debug method to see full phone object structure
+        :param device_name: Device name/ID
+        :return: Full phone object response
+        """
+        try:
+            phone_resp = self.service.getPhone(name=device_name)
+            return serialize_object(phone_resp)
+        except Exception as e:
+            return {'error': str(e)}
+
+    def check_device_login(self, device_name):
+        """
+        Check if a device has a user logged in via Extension Mobility
+        :param device_name: Device name/ID (e.g., SEPDC0539FB8FA2)
+        :return: result dictionary with logged_in status and user info
+        """
+        result = {
+            'success': False,
+            'logged_in': False,
+            'user': None,
+            'error': '',
+        }
+        try:
+            phone_resp = self.service.getPhone(name=device_name)
+
+            # Navigate through response structure safely
+            if phone_resp is None:
+                result['error'] = 'No response from CUCM'
+                return serialize_object(result)
+
+            # Try to get phone data from response
+            if not isinstance(phone_resp, dict) or 'return' not in phone_resp:
+                result['error'] = f'Unexpected response structure'
+                return serialize_object(result)
+
+            if 'phone' not in phone_resp['return']:
+                result['error'] = f'No phone data in response'
+                return serialize_object(result)
+
+            phone_data = phone_resp['return']['phone']
+
+            # Check if there's an owner/associated user
+            if phone_data and isinstance(phone_data, dict) and 'owner' in phone_data and phone_data['owner']:
+                owner_data = phone_data['owner']
+                # Handle different possible owner value formats
+                if isinstance(owner_data, dict):
+                    # Try different common key names for user ID
+                    user_id = (owner_data.get('_value_1') or
+                              owner_data.get('userid') or
+                              owner_data.get('value') or
+                              str(owner_data))
+                else:
+                    user_id = str(owner_data)
+
+                result['logged_in'] = True
+                result['user'] = user_id
+                result['success'] = True
+            else:
+                result['success'] = True
+                result['logged_in'] = False
+
+        except Fault as error:
+            # Get more details from the fault
+            fault_str = str(error)
+            if hasattr(error, 'detail'):
+                fault_str += f" - Detail: {str(error.detail)}"
+            result['error'] = f'AXL Fault: {fault_str}'
+        except Exception as error:
+            result['error'] = f'Error: {type(error).__name__}: {str(error)}'
+
+        result = serialize_object(result)
+        return result
 
     def get_CCMVersion(self):
         '''
