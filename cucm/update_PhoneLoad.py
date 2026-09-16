@@ -3,6 +3,9 @@
 """
 Update phone load on phones in CUCM based on phone model.
 
+CUCM Cluster: select from clusters.csv or provide manually
+Credentials: checks stored credentials in credentials.env
+
 CSV:
 phone
 SEP0123456789AB
@@ -25,9 +28,8 @@ from csv import DictReader
 from datetime import datetime
 import time
 import urllib3
-import getpass
-from general import serverSetup
 from setup.logger import setup_logger
+from setup.multi_object_loader import get_object_for_single_operation, load_credentials
 from ucmAPI import AXL
 
 
@@ -165,14 +167,19 @@ def use_csv():
 
 
 if __name__ == '__main__':
-    # Set current working directory to basepath
     basepath = Path.cwd()
 
-    # Get server and login credentials
-    cucmInfoFile = input('CUCM JSON File (cucm-info.json): ') or 'cucm-info.json'
-    username, password, cucm, version = serverSetup(basepath / cucmInfoFile, 'username', 'password', 'server', 'version', 'non-api')
-    if password == '':
-        password = getpass.getpass('Enter CUCM Password for ' + username + ':')
+    # Load cluster information from clusters.csv or interactive input
+    cluster = get_object_for_single_operation(basepath, 'CUCM')
+    if not cluster:
+        print("Error: Unable to load cluster information")
+        sys.exit(1)
+
+    # Load credentials
+    username, password = load_credentials('CUCM', cluster['name'])
+
+    cucm = cluster['server']
+    version = cluster['version']
 
     # Setup Logging
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")

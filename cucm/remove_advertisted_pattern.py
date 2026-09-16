@@ -7,9 +7,8 @@ Usage:
     python3 remove_advertisted_pattern.py
 
 The script is interactive and will prompt for:
-    CUCM JSON File (cucm-info.json): path to the JSON file with server/login
-        info (default: cucm-info.json). If the password field in that file
-        is blank, you will be prompted to enter it.
+    CUCM Cluster: select from clusters.csv or provide manually
+    Credentials: checks stored credentials in credentials.env
     Use CSV?: (y/n): choose 'y' to bulk remove patterns from a CSV file,
         or 'n' (default) to remove a single pattern.
 
@@ -24,8 +23,7 @@ If removal of a pattern fails and the pattern does not already start with
 '+', the script automatically retries the removal with a '+' prefixed to
 the pattern.
 
-CSV:
-pattern
+CSV format (pattern):
 +155585944XX
 
 The CSV may contain additional columns; only the "pattern" column is used.
@@ -38,10 +36,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from csv import DictReader
 from datetime import datetime
-import time
 import urllib3
-from general import serverSetup
 from setup.logger import setup_logger
+from setup.multi_object_loader import get_object_for_single_operation, load_credentials
 from ucmAPI import AXL
 
 
@@ -104,14 +101,19 @@ def use_csv():
 
 
 if __name__ == '__main__':
-    # Set current working directory to basepath
     basepath = Path.cwd()
 
-    # Get server and login credentials
-    cucmInfoFile = input('CUCM JSON File (cucm-info.json): ') or 'cucm-info.json'
-    username, password, cucm, version = serverSetup(basepath / cucmInfoFile, 'username', 'password', 'server', 'version', 'non-api')
-    if password == '':
-        password = input('Enter CUCM Password for ' + username + ':')
+    # Load cluster information
+    cluster = get_object_for_single_operation(basepath, 'CUCM')
+    if not cluster:
+        print("Error: Unable to load cluster information")
+        sys.exit(1)
+
+    # Load credentials
+    username, password = load_credentials('CUCM', cluster['name'])
+
+    cucm = cluster['server']
+    version = cluster['version']
 
     # Setup Logging
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -123,7 +125,7 @@ if __name__ == '__main__':
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     wsdlPath = basepath / 'schema' / version / 'AXLAPI.wsdl'
     wsdl = wsdlPath.absolute().as_uri()
-    axl = AXL(username=username,password=password,wsdl=wsdl,cucm=cucm,cucm_version=version)
+    axl = AXL(username=username, password=password, wsdl=wsdl, cucm=cucm, cucm_version=version)
 
     # Calling the main function
     main()

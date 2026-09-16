@@ -27,9 +27,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from csv import reader
 from datetime import datetime
 import time
-import getpass
 import urllib3
 from setup.logger import setup_logger
+from setup.multi_object_loader import get_object_for_single_operation, load_credentials, get_objects_for_multi_operation, load_credentials_for_multi_objects
 from ucmAPI import AXL
 
 
@@ -88,12 +88,11 @@ def interactive_csv_mode(axl, logger):
 def run_operation_on_cluster(basepath, cluster_data, operation_params, cluster_credentials, logger):
     """Run the codec preference operation on a single cluster"""
     try:
-        cluster_name = cluster_data['cluster_name']
+        cluster_name = cluster_data['name']
         server = cluster_data['server']
         version = cluster_data['version']
 
-        username = cluster_credentials[cluster_name]['username']
-        password = cluster_credentials[cluster_name]['password']
+        username, password = cluster_credentials[cluster_name]
 
         # Setup AXL Connection to CUCM
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -123,23 +122,14 @@ def run_on_all_clusters(basepath, clusters_data, operation_params, logger):
     """Run operation on all clusters sequentially"""
     print(f"\nProcessing {len(clusters_data)} clusters...\n")
 
-    # Get credentials
-    print("Credential Configuration:")
-    use_same_creds = input('Use the same username/password for all clusters?: (y/n) ') or 'y'
+    # Load credentials using the new loader
+    print("="*80)
+    print("Loading Credentials")
+    print("="*80)
+    use_same = input('Use same credentials for all clusters? (y/n) [default: y]: ').strip().lower()
+    use_same = use_same in ('', 'y', 'yes')
 
-    cluster_credentials = {}
-
-    if use_same_creds.lower() in ('y', 'yes'):
-        username = input('Username: ')
-        password = getpass.getpass('Password: ')
-        for cluster in clusters_data:
-            cluster_credentials[cluster['cluster_name']] = {'username': username, 'password': password}
-    else:
-        for cluster in clusters_data:
-            print(f"\nCluster: {cluster['cluster_name']} ({cluster['server']})")
-            username = input(f'  Username: ')
-            password = getpass.getpass(f'  Password: ')
-            cluster_credentials[cluster['cluster_name']] = {'username': username, 'password': password}
+    cluster_credentials = load_credentials_for_multi_objects('CUCM', clusters_data, use_same=use_same)
 
     successful = 0
     failed = 0
@@ -155,29 +145,6 @@ def run_on_all_clusters(basepath, clusters_data, operation_params, logger):
     print(f"{'=' * 60}")
 
 
-def read_clusters_csv(csv_file):
-    """Read clusters from CSV file"""
-    clusters = []
-    with open(csv_file, 'r', encoding='utf8') as my_file:
-        csv_reader = reader(my_file)
-        header = next(my_file)
-        for row in csv_reader:
-            if not row or not row[0].strip():
-                continue
-            cluster_name = row[0].strip()
-            server = row[1].strip() if len(row) > 1 else ''
-            version = row[2].strip() if len(row) > 2 else ''
-
-            if not cluster_name or not server or not version:
-                print(f"Skipping incomplete cluster row: {row}")
-                continue
-
-            clusters.append({
-                'cluster_name': cluster_name,
-                'server': server,
-                'version': version
-            })
-    return clusters
 
 
 if __name__ == '__main__':
@@ -190,42 +157,65 @@ if __name__ == '__main__':
     logger = setup_logger(log_file)
     logger.info("Create Audio Codec Preference List - Started")
 
-    clusters_file = basepath.parent / '_DATA' / 'clusters.csv'
     use_multiple = False
 
-    if clusters_file.exists():
-        response = input('clusters.csv found. Use multiple clusters?: (y/n) ') or 'n'
+    clusters_data = get_objects_for_multi_operation(basepath, 'CUCM')
+    if clusters_data:
+        response = input(f'{len(clusters_data)} clusters found. Use multiple clusters?: (y/n) ') or 'n'
         if response.lower() in ('y', 'yes'):
             use_multiple = True
 
-    if use_multiple:
-        clusters_data = read_clusters_csv(clusters_file)
+        if use_multiple:
+            if not clusters_data:
+                print("No clusters found in clusters.csv")
+                exit(1)
 
-        if not clusters_data:
-            print("No clusters found in clusters.csv")
-            exit(1)
+            csv_mode_response = input('Use CSV for Codec List?: (y/n) ') or 'n'
 
-        csv_mode_response = input('Use CSV for Codec List?: (y/n) ') or 'n'
+            if csv_mode_response.lower() in ('y', 'yes'):
+                csv_file = input('Enter CSV file name or full path [_DATA/audioCodecPreferenceLists.csv]: ') or str(basepath.parent / '_DATA' / 'audioCodecPreferenceLists.csv')
+                operation_params = {'type': 'csv', 'csv_file': csv_file}
+            else:
+                name = input('Codec Preference List Name: ')
+                description = input('Description (optional): ') or ''
+                codec_input = input('Enter codecs (comma-separated, in priority order): ')
+                codec_list = [codec.strip() for codec in codec_input.split(',')]
+                operation_params = {'type': 'single', 'name': name, 'description': description, 'codec_list': codec_list}
 
-        if csv_mode_response.lower() in ('y', 'yes'):
-            csv_file = input('Enter CSV file name or full path [_DATA/audioCodecPreferenceLists.csv]: ') or str(basepath.parent / '_DATA' / 'audioCodecPreferenceLists.csv')
-            operation_params = {'type': 'csv', 'csv_file': csv_file}
+            run_on_all_clusters(basepath, clusters_data, operation_params, logger)
         else:
-            name = input('Codec Preference List Name: ')
-            description = input('Description (optional): ') or ''
-            codec_input = input('Enter codecs (comma-separated, in priority order): ')
-            codec_list = [codec.strip() for codec in codec_input.split(',')]
-            operation_params = {'type': 'single', 'name': name, 'description': description, 'codec_list': codec_list}
+            # Single cluster mode - user said 'n' to multiple clusters
+            cluster = get_object_for_single_operation(basepath, 'CUCM')
+            if not cluster:
+                print("Error: Unable to load cluster information")
+                sys.exit(1)
 
-        run_on_all_clusters(basepath, clusters_data, operation_params, logger)
+            username, password = load_credentials('CUCM', cluster['name'])
+
+            server = cluster['server']
+            version = cluster['version']
+
+            wsdl_dir = basepath / 'schema' / version / 'AXLAPI.wsdl'
+            wsdl = wsdl_dir.absolute().as_uri()
+            axl = AXL(username=username, password=password, wsdl=wsdl, cucm=server, cucm_version=version)
+
+            input_type_csv = input('Use CSV for Codec List?: (y/n) ') or 'n'
+            if input_type_csv.lower() in ('y', 'yes'):
+                interactive_csv_mode(axl, logger)
+            else:
+                interactive_single_mode(axl, logger)
 
     else:
-        # Single cluster mode
-        server = input('CUCM Server IP: ')
-        version = input('CUCM Version (e.g., 15.0): ')
+        # No clusters found in CSV - single cluster mode with manual input
+        cluster = get_object_for_single_operation(basepath, 'CUCM')
+        if not cluster:
+            print("Error: Unable to load cluster information")
+            sys.exit(1)
 
-        username = input('Username: ')
-        password = getpass.getpass('Password: ')
+        username, password = load_credentials('CUCM', cluster['name'])
+
+        server = cluster['server']
+        version = cluster['version']
 
         wsdl_dir = basepath / 'schema' / version / 'AXLAPI.wsdl'
         wsdl = wsdl_dir.absolute().as_uri()

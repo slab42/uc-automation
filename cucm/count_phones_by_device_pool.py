@@ -10,9 +10,8 @@ Usage:
     python3 count_phones_by_device_pool.py
 
 The script is interactive and will prompt for:
-    CUCM JSON File (cucm-info.json): path to the JSON file with server/login
-        info (default: cucm-info.json). If the password field in that file
-        is blank, you will be prompted to enter it.
+    CUCM Cluster: select from clusters.csv or provide manually
+    Credentials: checks stored credentials in credentials.env
     Include Analog Devices?: (y/n): choose 'y' to include analog access
         devices in the count, or 'n' (default) to exclude them.
 
@@ -38,8 +37,13 @@ from datetime import datetime
 import time
 import urllib3
 import csv
-from general import serverSetup
 from setup.logger import setup_logger
+from setup.multi_object_loader import (
+    get_object_for_single_operation,
+    load_credentials,
+    get_objects_for_multi_operation,
+    load_credentials_for_multi_objects
+)
 from ucmAPI import AXL
 
 
@@ -175,6 +179,81 @@ def display_results(rows, logger, include_analog=False):
     logger.info('Phone count operation completed successfully')
 
 
+def run_report(axl, logger, server, include_analog=False):
+    """Run phone count report on a single cluster."""
+    rows = count_phones_by_pool(axl, logger, include_analog=include_analog)
+    if rows is not None:
+        display_results(rows, logger, include_analog=include_analog)
+
+        # Ask whether to save to CSV
+        save_csv_input = input('\nSave results to CSV?: (y/n) ') or 'n'
+        if save_csv_input.lower() in ('y', 'yes'):
+            timestamp = time.strftime("%Y_%m_%d-%H_%M_%S")
+            if server:
+                csv_filename = f'phone-count-{server}-{timestamp}.csv'
+            else:
+                csv_filename = f'phone-count-{timestamp}.csv'
+            write_results_to_csv(rows, csv_filename, logger, include_analog=include_analog)
+    return True
+
+
+def run_operation_on_cluster(basepath, cluster_data, operation_params, cluster_credentials, logger):
+    """Run phone count operation on a single cluster."""
+    try:
+        cluster_name = cluster_data['name']
+        server = cluster_data['server']
+        version = cluster_data['version']
+
+        username, password = cluster_credentials[cluster_name]
+
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        wsdl_dir = basepath / 'schema' / version / 'AXLAPI.wsdl'
+        wsdl = wsdl_dir.absolute().as_uri()
+        axl = AXL(username=username, password=password, wsdl=wsdl, cucm=server, cucm_version=version)
+
+        logger.info('=' * 60)
+        logger.info('Processing cluster: %s (%s)', cluster_name, server)
+        logger.info('=' * 60)
+
+        include_analog = operation_params.get('include_analog', False)
+        success = run_report(axl, logger, server, include_analog=include_analog)
+
+        logger.info('Completed cluster: %s', cluster_name)
+        if success:
+            print(f"✓ Completed {cluster_name} ({server})")
+        return success
+    except Exception as e:
+        print(f"✗ Failed on {cluster_name}: {str(e)}")
+        logger.error(f"Exception on cluster {cluster_name}: {str(e)}")
+        return False
+
+
+def run_on_all_clusters(basepath, clusters_data, operation_params, logger):
+    """Run phone count on all clusters sequentially."""
+    print(f"\nProcessing {len(clusters_data)} clusters...\n")
+
+    print("="*80)
+    print("Loading Credentials")
+    print("="*80)
+    use_same = input('Use same credentials for all clusters? (y/n) [default: y]: ').strip().lower()
+    use_same = use_same in ('', 'y', 'yes')
+
+    cluster_credentials = load_credentials_for_multi_objects('CUCM', clusters_data, use_same=use_same)
+
+    successful = 0
+    failed = 0
+
+    for cluster in clusters_data:
+        if run_operation_on_cluster(basepath, cluster, operation_params, cluster_credentials, logger):
+            successful += 1
+        else:
+            failed += 1
+
+    print(f"\n{'=' * 60}")
+    print(f"Completed: {successful} successful, {failed} failed")
+    print(f"{'=' * 60}")
+
+
 def write_results_to_csv(rows, filepath, logger, include_analog=False):
     """
     Write phone count results to CSV file.
@@ -219,43 +298,53 @@ def write_results_to_csv(rows, filepath, logger, include_analog=False):
 
 
 if __name__ == '__main__':
-    # Set current working directory to basepath
     basepath = Path.cwd()
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-    # Get server and login credentials
-    cucmInfoFile = input('CUCM JSON File (cucm-info.json): ') or 'cucm-info.json'
-    username, password, cucm, version = serverSetup(basepath / cucmInfoFile, 'username', 'password', 'server', 'version', 'non-api')
-    if password == '':
-        password = input(f'Enter CUCM Password for {username}: ')
-
-    # Setup Logging
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    log_file = f"../_logs/{timestamp}-count-phones-by-device-pool-{cucm}.log"
+    log_file = f"../_logs/{timestamp}-count-phones-by-device-pool.log"
     logger = setup_logger(log_file)
     logger.info("Count Phones By Device Pool - Started")
-
-    # Setup AXL Connection to CUCM
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-    wsdlPath = basepath / 'schema' / version / 'AXLAPI.wsdl'
-    wsdl = wsdlPath.absolute().as_uri()
-    axl = AXL(username=username, password=password, wsdl=wsdl, cucm=cucm, cucm_version=version)
-
-    logger.info('Connected to CUCM: %s (version %s)', cucm, version)
 
     # Ask whether to skip analog devices and CTI ports
     skip_analog_input = input('Skip analog devices and CTI ports?: (y/n) ') or 'y'
     include_analog = skip_analog_input.lower() not in ('y', 'yes')
+    operation_params = {'include_analog': include_analog}
 
-    # Get phone counts
-    rows = count_phones_by_pool(axl, logger, include_analog=include_analog)
+    clusters_data = get_objects_for_multi_operation(basepath, 'CUCM')
+    if clusters_data:
+        response = input(f'{len(clusters_data)} clusters found. Use multiple clusters?: (y/n) ') or 'n'
+        if response.lower() in ('y', 'yes'):
+            run_on_all_clusters(basepath, clusters_data, operation_params, logger)
+        else:
+            cluster = get_object_for_single_operation(basepath, 'CUCM')
+            if not cluster:
+                print("Error: Unable to load cluster information")
+                sys.exit(1)
 
-    # Display results
-    if rows is not None:
-        display_results(rows, logger, include_analog=include_analog)
+            username, password = load_credentials('CUCM', cluster['name'])
+            server = cluster['server']
+            version = cluster['version']
 
-        # Ask whether to save to CSV
-        save_csv_input = input('\nSave results to CSV?: (y/n) ') or 'n'
-        if save_csv_input.lower() in ('y', 'yes'):
-            csv_filename = f'phone-count-{cucm}-{time.strftime("%Y_%m_%d-%H_%M_%S")}.csv'
-            csv_filepath = basepath / csv_filename
-            write_results_to_csv(rows, csv_filepath, logger, include_analog=include_analog)
+            wsdl_dir = basepath / 'schema' / version / 'AXLAPI.wsdl'
+            wsdl = wsdl_dir.absolute().as_uri()
+            axl = AXL(username=username, password=password, wsdl=wsdl, cucm=server, cucm_version=version)
+
+            logger.info('Connected to CUCM: %s (version %s)', server, version)
+            run_report(axl, logger, server, include_analog=include_analog)
+    else:
+        cluster = get_object_for_single_operation(basepath, 'CUCM')
+        if not cluster:
+            print("Error: Unable to load cluster information")
+            sys.exit(1)
+
+        username, password = load_credentials('CUCM', cluster['name'])
+        server = cluster['server']
+        version = cluster['version']
+
+        wsdl_dir = basepath / 'schema' / version / 'AXLAPI.wsdl'
+        wsdl = wsdl_dir.absolute().as_uri()
+        axl = AXL(username=username, password=password, wsdl=wsdl, cucm=server, cucm_version=version)
+
+        logger.info('Connected to CUCM: %s (version %s)', server, version)
+        run_report(axl, logger, server, include_analog=include_analog)

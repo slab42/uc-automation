@@ -10,9 +10,8 @@ Usage:
     python3 check_userMailboxUsage.py
 
 The script is interactive and will prompt for:
-    CUC JSON File (cuc-info.json): path to the JSON file with server/login
-        info (default: cuc-info.json). If the password field in that file
-        is blank, you will be prompted to enter it.
+    CUC Cluster: select from clusters.csv or provide manually
+    Credentials: checks stored credentials in credentials.env
     Use CSV?: (y/n): choose 'y' to export mailbox usage for multiple users from a CSV file,
         or 'n' (default) to check a single user's mailbox.
 
@@ -41,33 +40,16 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from csv import reader, writer
-import json
 import time
 import requests
 import urllib3
 from requests.auth import HTTPBasicAuth
-import logging
-from logging.handlers import StreamHandler
-import getpass
+from datetime import datetime
 from lxml import etree
 from setup.logger import setup_logger
+from setup.multi_object_loader import get_object_for_single_operation, load_credentials
 
 log_filename_prefix = 'check-userMailboxUsage-'
-
-
-def load_server_config(config_file):
-    """Load CUC server configuration from JSON file.
-
-    Args:
-        config_file (Path): Path to JSON config file
-
-    Returns:
-        dict: Configuration with keys: server, username, password, version
-    """
-    with open(config_file) as json_data_file:
-        config = json.load(json_data_file)
-
-    return config
 
 
 def get_extension_field(version):
@@ -240,23 +222,22 @@ if __name__ == '__main__':
 
     basepath = Path.cwd()
 
-    config_file = input('CUC JSON File (cuc-info.json): ') or 'cuc-info.json'
-    if not config_file.endswith('.json'):
-        config_file = config_file + '.json'
-    config = load_server_config(basepath / config_file)
+    # Load cluster information from clusters.csv or interactive input
+    cluster = get_object_for_single_operation(basepath, 'CUC')
+    if not cluster:
+        print("Error: Unable to load cluster information")
+        sys.exit(1)
 
-    cuc_server = config.get('server')
-    username = config.get('username')
-    password = config.get('password')
-    version = config.get('version', '15.0')
+    # Load credentials from credentials.env
+    username, password = load_credentials('CUC', cluster['name'])
+
+    cuc_server = cluster['server']
+    version = cluster['version']
 
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     log_file = f"../_logs/{timestamp}-check-usermailboxusage-{cuc_server}.log"
     logger = setup_logger(log_file)
     logger.info("Check User Mailbox Usage - Started")
-
-    if password == '' or password is None:
-        password = getpass.getpass(f'Enter CUC Password for {username}: ')
 
     logger.info(f'Starting check_userMailboxUsage for server: {cuc_server} (version: {version})')
     extension_field = get_extension_field(version)

@@ -7,6 +7,9 @@ Identifies route patterns that start with '.+' and have a corresponding pattern
 starting with '+' with the same 11-digit suffix, then prompts to delete the
 '.+' pattern (keeping the '+' pattern as the canonical version).
 
+CUCM Cluster: select from clusters.csv or provide manually
+Credentials: checks stored credentials in credentials.env
+
 For example:
   .+1234567890 (dot-plus prefix)
   +1234567890  (plus prefix)
@@ -21,8 +24,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from datetime import datetime
 import time
 import urllib3
-from general import serverSetup
 from setup.logger import setup_logger
+from setup.multi_object_loader import (
+    get_object_for_single_operation,
+    load_credentials,
+    get_objects_for_multi_operation,
+    load_credentials_for_multi_objects
+)
 from ucmAPI import AXL
 
 
@@ -127,36 +135,15 @@ def prompt_delete_patterns(duplicates, axl):
     logger.info(f'Remediation complete. Deleted: {deleted_count}, Skipped: {skipped_count}')
 
 
-if __name__ == '__main__':
-    # Set current working directory to basepath
-    basepath = Path.cwd()
-
-    # Get server and login credentials
-    cucmInfoFile = input('CUCM JSON File (cucm-info.json): ') or 'cucm-info.json'
-    username, password, cucm, version = serverSetup(basepath / cucmInfoFile, 'username', 'password', 'server', 'version', 'non-api')
-    if password == '':
-        password = input('Enter CUCM Password for ' + username + ':')
-
-    # Setup Logging
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    log_file = f"../_logs/{timestamp}-remediate-duplicatish-rps-{cucm}.log"
-    logger = setup_logger(log_file)
-    logger.info("Remediate Duplicatish Rps - Started")
-
-    # Setup AXL Connection to CUCM
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-    wsdlPath = basepath / 'schema' / version / 'AXLAPI.wsdl'
-    wsdl = wsdlPath.absolute().as_uri()
-    axl = AXL(username=username, password=password, wsdl=wsdl, cucm=cucm, cucm_version=version)
-
-    # Get all route patterns
+def run_remediation(axl, logger):
+    """Run remediation on a single cluster."""
     logger.info('Fetching route patterns from CUCM')
     route_result = axl.list_route_patterns()
 
     if not route_result.get('success'):
         logger.error(f'Failed to retrieve route patterns: {route_result.get("error")}')
         print(f'Error: {route_result.get("error")}')
-        exit(1)
+        return False
 
     route_response = route_result.get('response', [])
     if not route_response or route_response == '':
@@ -168,7 +155,6 @@ if __name__ == '__main__':
 
     logger.info(f'Retrieved {len(route_patterns)} route patterns')
 
-    # Find duplicate-ish patterns
     logger.info('Searching for duplicate-ish patterns (.+ vs +)')
     duplicates = find_duplicate_patterns(route_patterns)
 
@@ -179,3 +165,109 @@ if __name__ == '__main__':
     else:
         logger.info('No duplicate-ish patterns found')
         print('No duplicate-ish patterns found')
+
+    return True
+
+
+def run_operation_on_cluster(basepath, cluster_data, cluster_credentials, logger):
+    """Run remediation on a single cluster."""
+    try:
+        cluster_name = cluster_data['name']
+        server = cluster_data['server']
+        version = cluster_data['version']
+
+        username, password = cluster_credentials[cluster_name]
+
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        wsdl_dir = basepath / 'schema' / version / 'AXLAPI.wsdl'
+        wsdl = wsdl_dir.absolute().as_uri()
+        axl = AXL(username=username, password=password, wsdl=wsdl, cucm=server, cucm_version=version)
+
+        logger.info('=' * 60)
+        logger.info('Processing cluster: %s (%s)', cluster_name, server)
+        logger.info('=' * 60)
+
+        success = run_remediation(axl, logger)
+
+        logger.info('Completed cluster: %s', cluster_name)
+        if success:
+            print(f"✓ Completed {cluster_name} ({server})")
+        return success
+    except Exception as e:
+        print(f"✗ Failed on {cluster_name}: {str(e)}")
+        return False
+
+
+def run_on_all_clusters(basepath, clusters_data, logger):
+    """Run remediation on all clusters sequentially."""
+    print(f"\nProcessing {len(clusters_data)} clusters...\n")
+
+    print("="*80)
+    print("Loading Credentials")
+    print("="*80)
+    use_same = input('Use same credentials for all clusters? (y/n) [default: y]: ').strip().lower()
+    use_same = use_same in ('', 'y', 'yes')
+
+    cluster_credentials = load_credentials_for_multi_objects('CUCM', clusters_data, use_same=use_same)
+
+    successful = 0
+    failed = 0
+
+    for cluster in clusters_data:
+        if run_operation_on_cluster(basepath, cluster, cluster_credentials, logger):
+            successful += 1
+        else:
+            failed += 1
+
+    print(f"\n{'=' * 60}")
+    print(f"Completed: {successful} successful, {failed} failed")
+    print(f"{'=' * 60}")
+
+
+if __name__ == '__main__':
+    basepath = Path.cwd()
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    log_file = f"../_logs/{timestamp}-remediate-duplicatish-rps.log"
+    logger = setup_logger(log_file)
+    logger.info("Remediate Duplicatish Route Patterns - Started")
+
+    clusters_data = get_objects_for_multi_operation(basepath, 'CUCM')
+    if clusters_data:
+        response = input(f'{len(clusters_data)} clusters found. Use multiple clusters?: (y/n) ') or 'n'
+        if response.lower() in ('y', 'yes'):
+            run_on_all_clusters(basepath, clusters_data, logger)
+        else:
+            cluster = get_object_for_single_operation(basepath, 'CUCM')
+            if not cluster:
+                print("Error: Unable to load cluster information")
+                sys.exit(1)
+
+            username, password = load_credentials('CUCM', cluster['name'])
+
+            server = cluster['server']
+            version = cluster['version']
+
+            wsdl_dir = basepath / 'schema' / version / 'AXLAPI.wsdl'
+            wsdl = wsdl_dir.absolute().as_uri()
+            axl = AXL(username=username, password=password, wsdl=wsdl, cucm=server, cucm_version=version)
+
+            run_remediation(axl, logger)
+
+    else:
+        cluster = get_object_for_single_operation(basepath, 'CUCM')
+        if not cluster:
+            print("Error: Unable to load cluster information")
+            sys.exit(1)
+
+        username, password = load_credentials('CUCM', cluster['name'])
+
+        server = cluster['server']
+        version = cluster['version']
+
+        wsdl_dir = basepath / 'schema' / version / 'AXLAPI.wsdl'
+        wsdl = wsdl_dir.absolute().as_uri()
+        axl = AXL(username=username, password=password, wsdl=wsdl, cucm=server, cucm_version=version)
+
+        run_remediation(axl, logger)

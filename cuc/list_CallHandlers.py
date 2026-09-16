@@ -9,9 +9,8 @@ Usage:
     python3 list_CallHandlers.py
 
 The script is interactive and will prompt for:
-    CUC JSON File (cuc-info.json): path to the JSON file with server/login
-        info (default: cuc-info.json). If the password field in that file
-        is blank, you will be prompted to enter it.
+    CUC Cluster: select from clusters.csv or provide manually
+    Credentials: checks stored credentials in credentials.env
     CSV Output File (callhandlers.csv): path to save the output CSV file.
 
 CSV Output Format:
@@ -25,10 +24,7 @@ from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import json
-import getpass
-import logging
-from logging.handlers import StreamHandler
+from datetime import datetime
 import time
 import requests
 from requests.auth import HTTPBasicAuth
@@ -36,6 +32,7 @@ import urllib3
 from lxml import etree
 import csv
 from setup.logger import setup_logger
+from setup.multi_object_loader import get_object_for_single_operation, load_credentials
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -49,26 +46,6 @@ SKIP_HANDLERS = {
     'undeliverablemessagesmailbox',
     'operator'
 }
-
-
-def load_server_config(config_file):
-    """Load CUC server configuration from JSON file.
-
-    Args:
-        config_file (Path): Path to JSON config file
-
-    Returns:
-        dict: Configuration with keys: server, username, password, version
-    """
-    with open(config_file) as json_data_file:
-        config = json.load(json_data_file)
-
-    return config
-
-
-def prompt_for_password(prompt_text='Password: '):
-    """Prompt user for password without echoing to screen."""
-    return getpass.getpass(prompt_text)
 
 
 def get_call_handlers(http_session, cuc_server):
@@ -144,35 +121,11 @@ def write_to_csv(handlers, csv_file):
         raise
 
 
-def main():
-    config_file = input('CUC JSON File (cuc-info.json): ').strip() or 'cuc-info.json'
-
-    if not Path(config_file).exists():
-        print(f'Error: Config file {config_file} not found')
-        sys.exit(1)
-
-    config = load_server_config(config_file)
-    cuc_server = config.get('server')
-    username = config.get('username')
-    password = config.get('password', '')
-
-    if not password:
-        password = prompt_for_password('CUC Password: ')
-
-    global logger
-    basepath = Path(__file__).parent
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    log_file = f"../_logs/{timestamp}-list-callhandlers-{cuc_server}.log"
-    logger = setup_logger(log_file)
-    logger.info("List Call Handlers - Started")
-
+def main(http_session, cuc_server, logger):
+    """Main operation logic."""
     csv_file = input('CSV Output File (callhandlers.csv): ').strip() or 'callhandlers.csv'
 
     try:
-        http_session = requests.Session()
-        http_session.auth = HTTPBasicAuth(username, password)
-        http_session.headers.update({'Content-Type': 'application/xml'})
-
         handlers = get_call_handlers(http_session, cuc_server)
         write_to_csv(handlers, csv_file)
 
@@ -184,4 +137,28 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    basepath = Path.cwd()
+
+    # Load cluster information from clusters.csv or interactive input
+    cluster = get_object_for_single_operation(basepath, 'CUC')
+    if not cluster:
+        print("Error: Unable to load cluster information")
+        sys.exit(1)
+
+    # Load credentials
+    username, password = load_credentials('CUC', cluster['name'])
+
+    cuc_server = cluster['server']
+
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    log_file = f"../_logs/{timestamp}-list-callhandlers-{cuc_server}.log"
+    logger = setup_logger(log_file)
+    logger.info("List Call Handlers - Started")
+
+    http_session = requests.Session()
+    http_session.auth = HTTPBasicAuth(username, password)
+    http_session.headers.update({'Content-Type': 'application/xml'})
+
+    main(http_session, cuc_server, logger)
+
+    logger.info('Script completed')
