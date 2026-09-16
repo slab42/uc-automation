@@ -5,6 +5,9 @@ Cisco Router Platform Software Status Checker
 Connects to multiple Cisco routers via SSH and executes:
   show platform software status control-processor br
 
+Customer Variables - Imported from ../.var/check_router_mem_status.var
+  low_memory_threshold - Free memory percentage threshold for alerts (default: 33)
+
 Router list from CSV file (required):
   router_ip,hostname
   192.168.1.1,router-01
@@ -22,6 +25,7 @@ See .env.EXAMPLE/CREDENTIALS_ENV_README.md for credentials.env setup.
 import warnings
 warnings.filterwarnings('ignore')
 
+import argparse
 import csv
 import getpass
 import sys
@@ -40,6 +44,7 @@ SSH_TIMEOUT = 15
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from setup.logger import setup_logger
 from setup.env_loader import EnvironmentConfig, CredentialsLoader
+from setup.var_loader import load_customer_variables
 
 try:
     from netmiko import ConnectHandler
@@ -195,21 +200,32 @@ def check_router_status(device_config, logger):
 
 
 def main():
+    parser = argparse.ArgumentParser(description='Check Cisco router memory status')
+    parser.add_argument('-d', '--default', action='store_true', help='Accept defaults for all prompts without user interaction')
+    args = parser.parse_args()
+
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     log_file = f"../_logs/{timestamp}-check_router_status.log"
     logger = setup_logger(log_file)
 
+    # Load customer variables from .var file
+    customer_vars = load_customer_variables(__file__, logger, skip_prompts=args.default)
+    low_memory_threshold = int(customer_vars.get('low_memory_threshold', 10)) if customer_vars else 10
+
     env_config = EnvironmentConfig()
     email_cfg = env_config.get_email_config()
-    low_memory_threshold = env_config.get_memory_threshold()
 
     logger.info("Router Status Check - Started")
 
     # Step 1: Read router list from CSV
     print("\n" + "="*80)
-    csv_input = input("Enter path to CSV file [_DATA/routers.csv]: ").strip()
-    if not csv_input:
+    if args.default:
         csv_input = "../_DATA/routers.csv"
+        logger.info("Using default CSV path (--default flag set)")
+    else:
+        csv_input = input("Enter path to CSV file [_DATA/routers.csv]: ").strip()
+        if not csv_input:
+            csv_input = "../_DATA/routers.csv"
 
     routers = read_csv_routers(csv_input)
     if not routers:
@@ -227,7 +243,12 @@ def main():
     print("="*80)
     print("1. Single username/password for all routers")
     print("2. Per-router credentials (matched by hostname in credentials.env)")
-    cred_mode = input("\nSelect mode (1 or 2) [default: 1]: ").strip() or "1"
+    if args.default:
+        cred_mode = "1"
+        print("\nUsing default mode: 1 (single username/password)")
+        logger.info("Using default credential mode (--default flag set)")
+    else:
+        cred_mode = input("\nSelect mode (1 or 2) [default: 1]: ").strip() or "1"
 
     devices = []
     creds_loader = CredentialsLoader()
@@ -294,7 +315,12 @@ def main():
 
         if default_creds and default_creds['username']:
             print("\nFound default credentials in credentials.env")
-            use_stored = input("Use stored credentials? (y/n) [default: y]: ").strip().lower() or "y"
+            if args.default:
+                use_stored = "y"
+                print("Using stored credentials (--default flag set)")
+                logger.info("Using stored credentials (--default flag set)")
+            else:
+                use_stored = input("Use stored credentials? (y/n) [default: y]: ").strip().lower() or "y"
 
             if use_stored == "y":
                 username = default_creds['username']
@@ -366,7 +392,13 @@ def main():
     logger.info(f"Router Status Check - Completed ({successful}/{len(results)} successful)")
 
     print("\n" + "="*80)
-    send_email = input("Send summary email? (y/n): ").strip().lower()
+    if args.default:
+        send_email = "y"
+        print("Sending summary email (--default flag set)")
+        logger.info("Sending summary email (--default flag set)")
+    else:
+        send_email = input("Send summary email? (y/n): ").strip().lower() or "y"
+
     if send_email == 'y':
         send_summary_email(results, timestamp, logger, email_cfg, low_memory_threshold)
 

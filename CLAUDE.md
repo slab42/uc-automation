@@ -4,10 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-uc-automation is a collection of Python scripts for Unified Communications automation across on-premise (CUCM) and cloud (Webex) platforms. CUCM scripts use Cisco's AXL SOAP API via zeep; Webex scripts use REST APIs.
+uc-automation is a collection of Python scripts for Unified Communications automation across on-premise (CUCM), (CUC) and cloud (Webex) platforms. There are also scripts for CUBE management and maintenance.  CUCM and CUC scripts use Cisco's AXL SOAP API via zeep; Webex scripts use REST APIs; CUBE scripts can use SSH or the APIs.
 
 ## Hard Rules
 - ** Password visibility ** Anytime a script prompts for a password, it should never be displayed on screen.
+- Paswords should always be stored or requested from the .env/credentials.env file.
+- All CSV input files should be created in the _DATA folder.  Also examples of these files should be included in the _DATA/examples folder.
+- Script comments should always be at the very top of the script
+- Customer variable files (.var files) are not checked in; each customer maintains their own .var file matching the .var.EXAMPLE
 
 ## Directory Structure
 
@@ -27,10 +31,14 @@ uc-automation is a collection of Python scripts for Unified Communications autom
  - Schema artifacts
  - Use application.wadl file for schema first
 
+- **cube/** - Cisco CUBE scripts
+  - Individual operation scripts (add/remove/move patterns, update phone loads, etc.)
+
 - **setup/** - Shared utilities and loaders
   - `multi_object_loader.py` - loads clusters/routers from CSV and manages credential prompting
   - `env_loader.py` - loads configuration and credentials from .env files
   - `logger.py` - centralized logging setup
+  - `var_loader.py` - loads customer-specific variables from .var files
 
 - **_DATA/** - Configuration data
   - `clusters.csv` - cluster definitions for CUCM and CUC scripts
@@ -39,6 +47,12 @@ uc-automation is a collection of Python scripts for Unified Communications autom
 - **.env/** - Environment configuration (not checked in)
   - `credentials.env` - credentials for all clusters and routers
   - `customer_env.json` - customer-specific configuration
+
+- **.var/** - Customer environment variables for scripts.
+  - `.var/examples/` folder includes example `.var.EXAMPLE` files for all scripts with customer variables
+  - All scripts requiring customer-specific variables must have an associated `<script-name>.var.EXAMPLE` file
+  - Each script is matched to its runtime `.var` file (e.g., `check_router_mem_status.py` → `check_router_mem_status.var`)
+  - `.var` files are not checked in; each customer maintains their own configuration
 
 ## Dependencies
 
@@ -107,6 +121,33 @@ Password can be blank to prompt at runtime (recommended for security). Credentia
 For multi-object operations, script asks: "Use same credentials for all objects?" 
 - Yes: loads default or single credential set
 - No: prompts per-object
+
+## Customer Variables Configuration
+
+Scripts that require customer-specific variables (e.g., thresholds, timeouts, API endpoints) use the `var_loader.py` module. Workflow:
+
+1. Script needs customer variables: add a "Customer Variables" section at the top (before imports) in docstring
+2. Define variables in `<script-name>.var.EXAMPLE` in `.var/examples/` folder
+3. Script calls `load_customer_variables(script_name)` from `var_loader.py`
+4. If `.var` file exists:
+   - Display loaded variables
+   - Ask user to validate they are correct
+   - Load and return as dict
+5. If `.var` file does not exist:
+   - Display path to `.var.EXAMPLE`
+   - Ask user to create it based on the example
+   - On creation, ask: "Enter values interactively?" 
+     - Yes: prompt for each variable and save to `.var`
+     - No: open file for manual editing and end script; show path to `.var`
+6. Return variables dict to script for use
+
+Example `.var.EXAMPLE`:
+```ini
+[variables]
+memory_threshold = 80
+timeout_seconds = 30
+api_endpoint = https://example.com/api
+```
 
 ## Running CUCM/CUC/CUBE Scripts
 
@@ -217,6 +258,15 @@ Examples:
 5. Prompt for single vs. CSV mode
 6. Process data, call API, log results
 7. Document operation CSV format in docstring
+
+**Adding customer variables to a script:**
+1. Create `.var.EXAMPLE` file in `.var/examples/` (INI format with `[variables]` section)
+2. Document variable requirements in script docstring, add "Customer Variables:" section (after opening description, before other sections)
+3. Import `load_customer_variables()` from `var_loader.py` in setup/
+4. Call early in main() (after logger setup): `vars = load_customer_variables(__file__, logger)`
+5. Add comment: `# Load customer variables from .var file`
+6. Use variables throughout script from returned dict: `vars['variable_name']`
+7. Provide sensible defaults when unpacking variables in case user skips var_loader workflow
 
 **Extending ucmAPI.py:**
 1. Add method to AXL class
