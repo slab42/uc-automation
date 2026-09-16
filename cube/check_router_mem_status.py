@@ -5,10 +5,18 @@ Cisco Router Platform Software Status Checker
 Connects to multiple Cisco routers via SSH and executes:
   show platform software status control-processor br
 
-CSV Format (headers optional, searched by name):
+Router list from CSV file (required):
   router_ip,hostname
   192.168.1.1,router-01
   192.168.1.2,router-02
+
+Credentials from:
+  - Interactive prompt (enter username/password at runtime)
+  - credentials.env file:
+    [CUBE:default] - Single credential set for all routers
+    [CUBE:hostname] - Per-router credentials matched by hostname
+
+See .env.EXAMPLE/CREDENTIALS_ENV_README.md for credentials.env setup.
 """
 
 import warnings
@@ -31,7 +39,7 @@ SSH_TIMEOUT = 15
 # Add parent directory to path to import from setup
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from setup.logger import setup_logger
-from setup.env_loader import EnvironmentConfig
+from setup.env_loader import EnvironmentConfig, CredentialsLoader
 
 try:
     from netmiko import ConnectHandler
@@ -197,7 +205,9 @@ def main():
 
     logger.info("Router Status Check - Started")
 
-    csv_input = input("Enter path to CSV file (routers): ").strip()
+    # Step 1: Read router list from CSV
+    print("\n" + "="*80)
+    csv_input = input("Enter path to CSV file [routers.csv]: ").strip()
     if not csv_input:
         csv_input = "routers.csv"
 
@@ -211,22 +221,108 @@ def main():
     for r in routers:
         print(f"  - {r['hostname']} ({r['ip']})")
 
+    # Step 2: Choose credential mode
     print("\n" + "="*80)
-    username = input("Enter SSH username: ").strip()
-    password = getpass.getpass("Enter SSH password: ")
+    print("Credential Mode")
+    print("="*80)
+    print("1. Single username/password for all routers")
+    print("2. Per-router credentials (matched by hostname in credentials.env)")
+    cred_mode = input("\nSelect mode (1 or 2) [default: 1]: ").strip() or "1"
 
     devices = []
-    for router in routers:
-        devices.append({
-            'device_type': SSH_DEVICE_TYPE,
-            'host': router['ip'],
-            'username': username,
-            'password': password,
-            'port': SSH_PORT,
-            'timeout': SSH_TIMEOUT,
-            'ip': router['ip'],
-            'hostname': router['hostname']
-        })
+    creds_loader = CredentialsLoader()
+
+    if cred_mode == "2":
+        # Per-router credentials mode
+        logger.info("Using per-router credentials from credentials.env")
+        cube_creds = creds_loader.get_cube_credentials()
+
+        if not cube_creds:
+            logger.warning("No credentials found in credentials.env, falling back to prompt")
+            print("\nWARNING: No credentials found in credentials.env")
+            print("Falling back to interactive prompt...")
+            username = input("Enter SSH username: ").strip()
+            password = getpass.getpass("Enter SSH password: ")
+            for router in routers:
+                devices.append({
+                    'device_type': SSH_DEVICE_TYPE,
+                    'host': router['ip'],
+                    'username': username,
+                    'password': password,
+                    'port': SSH_PORT,
+                    'timeout': SSH_TIMEOUT,
+                    'ip': router['ip'],
+                    'hostname': router['hostname']
+                })
+        else:
+            # Build credential map by hostname
+            cred_map = {cred['identifier']: cred for cred in cube_creds}
+
+            print(f"\nFound {len(cube_creds)} credential entries in credentials.env")
+
+            for router in routers:
+                # Try to find matching credentials by hostname
+                creds = cred_map.get(router['hostname'])
+
+                if creds:
+                    username = creds['username']
+                    password = creds['password']
+                    logger.info(f"Found credentials for {router['hostname']} in credentials.env")
+                    print(f"  ✓ {router['hostname']}: using credentials from credentials.env")
+                else:
+                    logger.warning(f"No credentials found for {router['hostname']}, will prompt")
+                    print(f"  ⚠ {router['hostname']}: no entry in credentials.env, will prompt at connect")
+                    username = input(f"    Username for {router['hostname']}: ").strip()
+                    password = getpass.getpass(f"    Password for {router['hostname']}: ")
+
+                devices.append({
+                    'device_type': SSH_DEVICE_TYPE,
+                    'host': router['ip'],
+                    'username': username,
+                    'password': password,
+                    'port': SSH_PORT,
+                    'timeout': SSH_TIMEOUT,
+                    'ip': router['ip'],
+                    'hostname': router['hostname']
+                })
+    else:
+        # Single credential mode
+        logger.info("Using single username/password for all routers")
+
+        # Try to load from [CUBE:default] in credentials.env
+        default_creds = creds_loader.get_cube_credentials('default')
+
+        if default_creds and default_creds['username']:
+            print("\nFound default credentials in credentials.env")
+            use_stored = input("Use stored credentials? (y/n) [default: y]: ").strip().lower() or "y"
+
+            if use_stored == "y":
+                username = default_creds['username']
+                password = default_creds['password']
+                if not password:
+                    password = getpass.getpass("Enter SSH password: ")
+                logger.info("Using stored username from credentials.env")
+            else:
+                username = input("Enter SSH username: ").strip()
+                password = getpass.getpass("Enter SSH password: ")
+        else:
+            # No stored credentials, prompt user
+            print("\nNo default credentials found in credentials.env")
+            username = input("Enter SSH username: ").strip()
+            password = getpass.getpass("Enter SSH password: ")
+
+        # Apply same credentials to all routers
+        for router in routers:
+            devices.append({
+                'device_type': SSH_DEVICE_TYPE,
+                'host': router['ip'],
+                'username': username,
+                'password': password,
+                'port': SSH_PORT,
+                'timeout': SSH_TIMEOUT,
+                'ip': router['ip'],
+                'hostname': router['hostname']
+            })
 
     print("\n" + "="*80)
     print("Executing commands...")
@@ -234,13 +330,13 @@ def main():
 
     results = []
     for i, device_config in enumerate(devices, 1):
-        logger.info(f"Processing router {i}/{len(devices)}: {routers[i-1]['hostname']}")
+        logger.info(f"Processing router {i}/{len(devices)}: {device_config['hostname']}")
         result = check_router_status(device_config, logger)
         memory_section = extract_memory_section(result['output']) if result['output'] else "N/A"
         free_pct = extract_free_percentage(result['output']) if result['output'] else 0
         results.append({
-            'hostname': routers[i-1]['hostname'],
-            'ip': routers[i-1]['ip'],
+            'hostname': device_config['hostname'],
+            'ip': device_config['ip'],
             'success': result['success'],
             'memory': memory_section,
             'free_pct': free_pct
