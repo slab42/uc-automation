@@ -342,37 +342,13 @@ def run_check_on_all_clusters(basepath, clusters_data, data, logger):
     return combined_results
 
 
-def main():
+def main(basepath, logger, mode, data, em_server=None, use_multiple_clusters=False, clusters_data=None):
     """Main execution."""
-    basepath = Path.cwd()
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-    # Setup Logging
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    log_file = f"../_logs/{timestamp}-em-bulk-login.log"
-    logger = setup_logger(log_file)
-    logger.info("Extension Mobility Bulk Login/Logout/Check - Started")
-
-    print("\n" + "=" * 60)
-    print("Extension Mobility Bulk Operations")
-    print("=" * 60 + "\n")
-
     try:
-        # Get operation mode
-        mode = get_operation_mode()
-        logger.info(f"Operation Mode: {mode.upper()}")
-
-        # Read EM data CSV first
+        # Read EM data CSV
         csv_file_path = basepath.parent / '_DATA' / 'em_users.csv'
         logger.info(f"CSV File: {csv_file_path}")
         logger.info("")
-
-        data = read_em_data(basepath)
-        if not data:
-            msg = "No valid records found in CSV file."
-            print(msg)
-            logger.error(msg)
-            return
 
         if mode == "login":
             action = "login"
@@ -385,28 +361,8 @@ def main():
 
         # Handle check mode with cluster support
         if mode == "check":
-            clusters_data = get_objects_for_multi_operation(basepath, 'CUCM')
-
-            if clusters_data:
-                response = input(f'{len(clusters_data)} clusters found. Use multiple clusters? (y/n) [default: n]: ') or 'n'
-                if response.lower() in ('y', 'yes'):
-                    results = run_check_on_all_clusters(basepath, clusters_data, data, logger)
-                else:
-                    cluster = get_object_for_single_operation(basepath, 'CUCM')
-                    if not cluster:
-                        print("Error: Unable to load CUCM cluster information")
-                        logger.error("Unable to load CUCM cluster information")
-                        sys.exit(1)
-
-                    username, password = load_credentials('CUCM', cluster['name'])
-                    server = cluster['server']
-                    version = cluster['version']
-
-                    wsdl_dir = basepath / 'schema' / version / 'AXLAPI.wsdl'
-                    wsdl = wsdl_dir.absolute().as_uri()
-                    axl_client = AXL(username=username, password=password, wsdl=wsdl, cucm=server, cucm_version=version)
-                    logger.info(f"CUCM Cluster: {cluster['name']} ({server})")
-                    results = load_em_urls(data, None, None, None, logger, mode, axl_client=axl_client)
+            if use_multiple_clusters and clusters_data:
+                results = run_check_on_all_clusters(basepath, clusters_data, data, logger)
             else:
                 cluster = get_object_for_single_operation(basepath, 'CUCM')
                 if not cluster:
@@ -426,7 +382,6 @@ def main():
 
         else:
             # Login/Logout mode
-            em_server = get_em_server()
             logger.info(f"EM Server: {em_server}:{EM_PORT}")
 
             # Setup HTTP session with retries
@@ -458,29 +413,67 @@ if __name__ == '__main__':
             sys.exit(1)
 
         device = sys.argv[2]
-       
+        basepath = Path(__file__).parent
+
+        # Load cluster and credentials
+        cluster = get_object_for_single_operation(basepath, 'CUCM')
+        if not cluster:
+            print("Error: Unable to load CUCM cluster")
+            sys.exit(1)
+
+        username, password = load_credentials('CUCM', cluster['name'])
+        server = cluster['server']
+        version = cluster['version']
+
+        wsdl_dir = basepath / 'schema' / version / 'AXLAPI.wsdl'
+        wsdl = wsdl_dir.absolute().as_uri()
+        axl_client = AXL(username=username, password=password, wsdl=wsdl, cucm=server, cucm_version=version)
+
         print(f"\nDEBUG: Querying device {device}...")
         phone_data = axl_client.debug_get_phone(device)
         print(f"\nPhone object (first 2000 chars):\n{str(phone_data)[:2000]}")
         sys.exit(0)
 
-    basepath = Path.cwd()
-    print(basepath)
+    # Normal execution
+    basepath = Path(__file__).parent
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-    # Load cluster and credentials
-    cluster = get_object_for_single_operation(basepath, 'CUCM')
-    print('cluster:' + cluster)
-    if not cluster:
-        print("Error: Unable to load CUCM cluster")
+    # Setup Logging
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    log_file = f"../_logs/{timestamp}-em-bulk-login.log"
+    logger = setup_logger(log_file)
+    logger.info("Extension Mobility Bulk Login/Logout/Check - Started")
+
+    print("\n" + "=" * 60)
+    print("Extension Mobility Bulk Operations")
+    print("=" * 60 + "\n")
+
+    # Get operation mode
+    mode = get_operation_mode()
+    logger.info(f"Operation Mode: {mode.upper()}")
+
+    # Read EM data
+    data = read_em_data(basepath)
+    if not data:
+        msg = "No valid records found in CSV file."
+        print(msg)
+        logger.error(msg)
         sys.exit(1)
 
-    username, password = load_credentials('CUCM', cluster['name'])
-    server = cluster['server']
-    version = cluster['version']
+    # Handle cluster checking for check mode
+    use_multiple_clusters = False
+    clusters_data = None
+    em_server = None
 
-    wsdl_dir = basepath / 'schema' / version / 'AXLAPI.wsdl'
-    wsdl = wsdl_dir.absolute().as_uri()
-    axl_client = AXL(username=username, password=password, wsdl=wsdl, cucm=server, cucm_version=version)
+    if mode == "check":
+        clusters_data = get_objects_for_multi_operation(basepath, 'CUCM')
+        if clusters_data:
+            response = input(f'{len(clusters_data)} clusters found. Use multiple clusters? (y/n) [default: n]: ') or 'n'
+            if response.lower() in ('y', 'yes'):
+                use_multiple_clusters = True
+    else:
+        # For login/logout, get EM server
+        em_server = get_em_server()
 
-
-    main()
+    # Run main operation
+    main(basepath, logger, mode, data, em_server=em_server, use_multiple_clusters=use_multiple_clusters, clusters_data=clusters_data)
