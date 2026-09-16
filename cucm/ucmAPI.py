@@ -663,6 +663,9 @@ class AXL(object):
                 result['error'] = 'No response from CUCM'
                 return serialize_object(result)
 
+            # Convert zeep response object to dict
+            phone_resp = serialize_object(phone_resp)
+
             # Try to get phone data from response
             if not isinstance(phone_resp, dict) or 'return' not in phone_resp:
                 result['error'] = f'Unexpected response structure'
