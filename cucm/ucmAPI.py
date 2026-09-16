@@ -677,22 +677,16 @@ class AXL(object):
 
             phone_data = phone_resp['return']['phone']
 
-            # Check if there's an owner/associated user
-            if phone_data and isinstance(phone_data, dict) and 'owner' in phone_data and phone_data['owner']:
-                owner_data = phone_data['owner']
-                # Handle different possible owner value formats
-                if isinstance(owner_data, dict):
-                    # Try different common key names for user ID
-                    user_id = (owner_data.get('_value_1') or
-                              owner_data.get('userid') or
-                              owner_data.get('value') or
-                              str(owner_data))
+            # Check if there's an EM user logged in via loginUserId field
+            if phone_data and isinstance(phone_data, dict):
+                login_user = phone_data.get('loginUserId')
+                if login_user:
+                    result['logged_in'] = True
+                    result['user'] = login_user
+                    result['success'] = True
                 else:
-                    user_id = str(owner_data)
-
-                result['logged_in'] = True
-                result['user'] = user_id
-                result['success'] = True
+                    result['success'] = True
+                    result['logged_in'] = False
             else:
                 result['success'] = True
                 result['logged_in'] = False
