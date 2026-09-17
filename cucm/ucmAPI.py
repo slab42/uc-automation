@@ -719,7 +719,14 @@ class AXL(object):
             result['response'] = resp['return']['componentVersion']['version']
         except Fault as error:
             result['response'] = 'ERROR'
-            result['error'] = error.message
+            fault_str = str(error)
+            if hasattr(error, 'detail'):
+                detail_str = str(error.detail)
+                if 'HTTP Status 401' in detail_str:
+                    fault_str = 'Authentication failed: Check AXL credentials'
+                else:
+                    fault_str += f" - {detail_str}"
+            result['error'] = fault_str
         result = serialize_object(result)
         return result
     
@@ -929,6 +936,7 @@ class AXL(object):
                         'description': '',
                         'locationName': '',
                         'devicePoolName': '',
+                        'phoneTemplateName': '',
                         'ownerUserName' : ''
                     })['return']['phone']
             result['success'] = True
@@ -1345,7 +1353,14 @@ class AXL(object):
             result['response'] = f'User successfully updated'
         except Fault as error:
             result['response'] = 'ERROR'
-            result['error'] = error.message
+            fault_str = str(error)
+            if hasattr(error, 'detail'):
+                detail_str = str(error.detail)
+                if 'HTTP Status 401' in detail_str:
+                    fault_str = 'Authentication failed: Check AXL credentials or permissions'
+                else:
+                    fault_str += f" - {detail_str}"
+            result['error'] = fault_str
         result = serialize_object(result)
         return result
 
@@ -1726,6 +1741,122 @@ class AXL(object):
             'error': '',
         }
         try:
+            resp = self.service.executeSQLQuery(sql=query)
+            if resp['return'] == None or resp['return'].get('row') is None:
+                result['success'] = True
+                result['response'] = []
+            else:
+                rows = resp['return']['row']
+                if not isinstance(rows, list):
+                    rows = [rows]
+                result['success'] = True
+                result['response'] = rows
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        result = serialize_object(result)
+        return result
+
+
+    def list_phone_button_templates(self):
+        """
+        Get List of Phone Button Templates
+        :return: A list of dictionaries with template details
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+        try:
+            fullResp = self.service.listPhoneButtonTemplate(
+                    {'name': '%'}, returnedTags={
+                        'name': '',
+                    })
+            if fullResp['return'] == None:
+                resp = ''
+            else:
+                resp = fullResp['return']['phoneButtonTemplate']
+            result['success'] = True
+            result['response'] = resp
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        result = serialize_object(result)
+        return result
+
+
+    def get_phone_button_template(self, name):
+        """
+        Get Phone Button Template details
+        :param name: Template name
+        :return: result dictionary
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+        try:
+            resp = self.service.getPhoneButtonTemplate(name=name)
+            result['success'] = True
+            result['response'] = resp['return']['phoneButtonTemplate']
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        result = serialize_object(result)
+        return result
+
+
+    def delete_phone_button_template(self, name):
+        """
+        Delete a Phone Button Template
+        :param name: Template name
+        :return: result dictionary
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+        try:
+            self.service.removePhoneButtonTemplate(name=name)
+            result['success'] = True
+            result['response'] = f'Phone Button Template "{name}" deleted successfully'
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        result = serialize_object(result)
+        return result
+
+
+    def find_template_references(self, template_name):
+        """
+        Find all references to a phone button template using SQL query
+        :param template_name: Template name
+        :return: result dictionary with list of references
+        """
+        result = {
+            'success': False,
+            'response': [],
+            'error': '',
+        }
+        try:
+            # Query to find references in device profiles
+            query = f"""
+            SELECT device.name as device_name, device.pkid
+            FROM device
+            WHERE device.phonetemplatename = '{template_name}'
+            UNION
+            SELECT deviceprofile.name as device_name, deviceprofile.pkid
+            FROM deviceprofile
+            WHERE deviceprofile.phonetemplatename = '{template_name}'
+            UNION
+            SELECT commonphoneconfig.name as device_name, commonphoneconfig.pkid
+            FROM commonphoneconfig
+            WHERE commonphoneconfig.phonetemplatename = '{template_name}'
+            """
+
             resp = self.service.executeSQLQuery(sql=query)
             if resp['return'] == None or resp['return'].get('row') is None:
                 result['success'] = True
