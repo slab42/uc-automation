@@ -14,6 +14,7 @@ import json
 import sys
 import getpass
 from setup.env_loader import CredentialsLoader
+from setup.prompt_utils import prompt_yes_no
 
 
 def validate_cluster_type(cluster_type):
@@ -214,8 +215,7 @@ def load_credentials(service, object_name, creds_loader=None):
         object_creds = None
 
     if object_creds:
-        use_object = input(f'  Use {object_name} credentials? (y/n) [default: y]: ').strip().lower()
-        use_object = use_object in ('', 'y', 'yes')
+        use_object = prompt_yes_no(f'  Use {object_name} credentials?', default=True)
 
         if use_object:
             username = object_creds.get('username', '')
@@ -243,8 +243,7 @@ def load_credentials(service, object_name, creds_loader=None):
         default_creds = None
 
     if default_creds:
-        use_default = input(f'  Use default credentials? (y/n) [default: y]: ').strip().lower()
-        use_default = use_default in ('', 'y', 'yes')
+        use_default = prompt_yes_no(f'  Use default credentials?', default=True)
 
         if use_default:
             username = default_creds.get('username', '')
@@ -376,8 +375,7 @@ def load_credentials_for_multi_objects(service, objects, use_same=True):
             default_creds = None
 
         if default_creds:
-            use_default = input(f'Use default credentials? (y/n) [default: y]: ').strip().lower()
-            use_default = use_default in ('', 'y', 'yes')
+            use_default = prompt_yes_no(f'Use default credentials?', default=True)
 
             if use_default:
                 username = default_creds.get('username', '')

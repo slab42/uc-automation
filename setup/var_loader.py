@@ -13,6 +13,7 @@ import os
 import sys
 import configparser
 from pathlib import Path
+from setup.prompt_utils import prompt_yes_no
 
 
 def get_var_file_path(script_name):
@@ -209,9 +210,9 @@ def validate_variables_with_user(variables, var_file_path, skip_prompts=False):
         print("Using default variables (skip prompts mode)\n")
         return True
 
-    response = input("Are these values correct? (y/n) [default: y]: ").strip().lower() or "y"
+    response = prompt_yes_no("Are these values correct?", default=True)
 
-    if response == "y":
+    if response:
         return True
     else:
         # User wants to edit, show interactive menu
