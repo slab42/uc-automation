@@ -184,13 +184,13 @@ def load_credentials(service, object_name, creds_loader=None):
     Load credentials for a service/object.
 
     Flow:
-    1. Prompt user: "Use default credentials?" (y/n)
-    2. If yes:
-       - Load default credentials
-       - If username missing, prompt for it
-       - If password missing, prompt for it (showing username if exists)
-    3. If no:
-       - Prompt for username and password
+    1. Check for object-specific credentials (e.g., CUCM:CUCM1)
+       - If found, ask "Use <object_name> credentials?"
+       - If yes, use them; if no, continue
+    2. Check for default credentials (e.g., CUCM:default)
+       - If found, ask "Use default credentials?"
+       - If yes, use them; if no, continue
+    3. Prompt user for manual entry
 
     Args:
         service (str): Service type ('CUCM', 'CUC', 'CUBE')
@@ -203,38 +203,68 @@ def load_credentials(service, object_name, creds_loader=None):
     if creds_loader is None:
         creds_loader = CredentialsLoader()
 
-    use_default = input(f'  Use default credentials? (y/n) [default: y]: ').strip().lower()
-    use_default = use_default in ('', 'y', 'yes')
-
-    if use_default:
-        # Try to load default credentials
-        if service.upper() == 'CUCM':
-            creds = creds_loader.get_cucm_credentials('default')
-        elif service.upper() == 'CUC':
-            creds = creds_loader.get_cuc_credentials('default')
-        elif service.upper() == 'CUBE':
-            creds = creds_loader.get_cube_credentials('default')
-        else:
-            creds = None
-
-        username = creds.get('username', '') if creds else ''
-        password = creds.get('password', '') if creds else ''
-
-        # Prompt for missing username
-        if not username:
-            username = input(f'  Enter username: ')
-
-        # Prompt for missing password (showing username if it exists)
-        if not password:
-            print(f'  Username: {username}')
-            password = getpass.getpass(f'  Enter password: ')
-
-        return username, password
+    # 1. Try object-specific credentials
+    if service.upper() == 'CUCM':
+        object_creds = creds_loader.get_cucm_credentials(object_name)
+    elif service.upper() == 'CUC':
+        object_creds = creds_loader.get_cuc_credentials(object_name)
+    elif service.upper() == 'CUBE':
+        object_creds = creds_loader.get_cube_credentials(object_name)
     else:
-        # Prompt for credentials
-        username = input(f'  Enter username: ')
-        password = getpass.getpass(f'  Enter password: ')
-        return username, password
+        object_creds = None
+
+    if object_creds:
+        use_object = input(f'  Use {object_name} credentials? (y/n) [default: y]: ').strip().lower()
+        use_object = use_object in ('', 'y', 'yes')
+
+        if use_object:
+            username = object_creds.get('username', '')
+            password = object_creds.get('password', '')
+
+            # Prompt for missing username
+            if not username:
+                username = input(f'  Enter username: ')
+
+            # Prompt for missing password
+            if not password:
+                print(f'  Username: {username}')
+                password = getpass.getpass(f'  Enter password: ')
+
+            return username, password
+
+    # 2. Try default credentials
+    if service.upper() == 'CUCM':
+        default_creds = creds_loader.get_cucm_credentials('default')
+    elif service.upper() == 'CUC':
+        default_creds = creds_loader.get_cuc_credentials('default')
+    elif service.upper() == 'CUBE':
+        default_creds = creds_loader.get_cube_credentials('default')
+    else:
+        default_creds = None
+
+    if default_creds:
+        use_default = input(f'  Use default credentials? (y/n) [default: y]: ').strip().lower()
+        use_default = use_default in ('', 'y', 'yes')
+
+        if use_default:
+            username = default_creds.get('username', '')
+            password = default_creds.get('password', '')
+
+            # Prompt for missing username
+            if not username:
+                username = input(f'  Enter username: ')
+
+            # Prompt for missing password
+            if not password:
+                print(f'  Username: {username}')
+                password = getpass.getpass(f'  Enter password: ')
+
+            return username, password
+
+    # 3. Manual entry
+    username = input(f'  Enter username: ')
+    password = getpass.getpass(f'  Enter password: ')
+    return username, password
 
 
 def get_object_for_single_operation(basepath, service, server_type=None):
@@ -335,33 +365,38 @@ def load_credentials_for_multi_objects(service, objects, use_same=True):
         print("Loading Credentials")
         print("="*80)
 
-        use_default = input(f'Use default credentials? (y/n) [default: y]: ').strip().lower()
-        use_default = use_default in ('', 'y', 'yes')
-
-        if use_default:
-            # Try default credentials
-            if service.upper() == 'CUCM':
-                creds = creds_loader.get_cucm_credentials('default')
-            elif service.upper() == 'CUC':
-                creds = creds_loader.get_cuc_credentials('default')
-            elif service.upper() == 'CUBE':
-                creds = creds_loader.get_cube_credentials('default')
-            else:
-                creds = None
-
-            username = creds.get('username', '') if creds else ''
-            password = creds.get('password', '') if creds else ''
-
-            # Prompt for missing username
-            if not username:
-                username = input(f'  Enter username: ')
-
-            # Prompt for missing password (showing username if it exists)
-            if not password:
-                print(f'  Username: {username}')
-                password = getpass.getpass(f'  Enter password: ')
+        # Try default credentials
+        if service.upper() == 'CUCM':
+            default_creds = creds_loader.get_cucm_credentials('default')
+        elif service.upper() == 'CUC':
+            default_creds = creds_loader.get_cuc_credentials('default')
+        elif service.upper() == 'CUBE':
+            default_creds = creds_loader.get_cube_credentials('default')
         else:
-            # Prompt for credentials
+            default_creds = None
+
+        if default_creds:
+            use_default = input(f'Use default credentials? (y/n) [default: y]: ').strip().lower()
+            use_default = use_default in ('', 'y', 'yes')
+
+            if use_default:
+                username = default_creds.get('username', '')
+                password = default_creds.get('password', '')
+
+                # Prompt for missing username
+                if not username:
+                    username = input(f'  Enter username: ')
+
+                # Prompt for missing password
+                if not password:
+                    print(f'  Username: {username}')
+                    password = getpass.getpass(f'  Enter password: ')
+            else:
+                # Prompt for credentials
+                username = input(f'Enter {service} Username: ')
+                password = getpass.getpass(f'Enter {service} Password: ')
+        else:
+            # No default credentials found, prompt for manual entry
             username = input(f'Enter {service} Username: ')
             password = getpass.getpass(f'Enter {service} Password: ')
 
