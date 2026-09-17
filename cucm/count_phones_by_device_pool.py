@@ -311,13 +311,13 @@ if __name__ == '__main__':
     include_analog = skip_analog_input.lower() not in ('y', 'yes')
     operation_params = {'include_analog': include_analog}
 
-    clusters_data = get_objects_for_multi_operation(basepath, 'CUCM')
+    clusters_data = get_objects_for_multi_operation(basepath, 'CUCM', server_type='publisher')
     if clusters_data:
         response = input(f'{len(clusters_data)} clusters found. Use multiple clusters?: (y/n) ') or 'n'
         if response.lower() in ('y', 'yes'):
             run_on_all_clusters(basepath, clusters_data, operation_params, logger)
         else:
-            cluster = get_object_for_single_operation(basepath, 'CUCM')
+            cluster = get_object_for_single_operation(basepath, 'CUCM', server_type='publisher')
             if not cluster:
                 print("Error: Unable to load cluster information")
                 sys.exit(1)
@@ -333,7 +333,7 @@ if __name__ == '__main__':
             logger.info('Connected to CUCM: %s (version %s)', server, version)
             run_report(axl, logger, server, include_analog=include_analog)
     else:
-        cluster = get_object_for_single_operation(basepath, 'CUCM')
+        cluster = get_object_for_single_operation(basepath, 'CUCM', server_type='publisher')
         if not cluster:
             print("Error: Unable to load cluster information")
             sys.exit(1)

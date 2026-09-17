@@ -180,7 +180,7 @@ if __name__ == '__main__':
     print("=" * 60 + "\n")
 
     # Load cluster and credentials
-    cluster = get_object_for_single_operation(basepath, 'CUCM')
+    cluster = get_object_for_single_operation(basepath, 'CUCM', server_type='publisher')
     if not cluster:
         print("Error: Unable to load CUCM cluster information")
         logger.error("Unable to load CUCM cluster information")

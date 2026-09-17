@@ -266,7 +266,7 @@ if __name__ == '__main__':
     basepath = Path.cwd()
 
     # Load cluster information from clusters.csv or interactive input
-    cluster = get_object_for_single_operation(basepath, 'CUC')
+    cluster = get_object_for_single_operation(basepath, 'CUC', server_type='publisher')
     if not cluster:
         print("Error: Unable to load cluster information")
         sys.exit(1)

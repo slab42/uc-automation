@@ -303,7 +303,7 @@ if __name__ == '__main__':
     logger = setup_logger(log_file)
     logger.info("Check User Mailbox - Started")
 
-    clusters_data = get_objects_for_multi_operation(basepath, 'CUC')
+    clusters_data = get_objects_for_multi_operation(basepath, 'CUC', server_type='publisher')
     if clusters_data:
         response = input(f'{len(clusters_data)} clusters found. Use multiple clusters?: (y/n) ') or 'n'
         if response.lower() in ('y', 'yes'):
@@ -318,7 +318,7 @@ if __name__ == '__main__':
                 operation_params = {'type': 'single'}
             run_on_all_clusters(clusters_data, operation_params, logger)
         else:
-            cluster = get_object_for_single_operation(basepath, 'CUC')
+            cluster = get_object_for_single_operation(basepath, 'CUC', server_type='publisher')
             if not cluster:
                 print("Error: Unable to load cluster information")
                 sys.exit(1)
@@ -344,7 +344,7 @@ if __name__ == '__main__':
             else:
                 run_single_user(http_session, cuc_server, version, logger)
     else:
-        cluster = get_object_for_single_operation(basepath, 'CUC')
+        cluster = get_object_for_single_operation(basepath, 'CUC', server_type='publisher')
         if not cluster:
             print("Error: Unable to load cluster information")
             sys.exit(1)

@@ -379,7 +379,7 @@ if __name__ == '__main__':
 
     use_multiple = False
 
-    clusters_data = get_objects_for_multi_operation(basepath, 'CUCM')
+    clusters_data = get_objects_for_multi_operation(basepath, 'CUCM', server_type='publisher')
     if clusters_data:
         response = input(f'{len(clusters_data)} clusters found. Use multiple clusters?: (y/n) ') or 'n'
         if response.lower() in ('y', 'yes'):
@@ -393,7 +393,7 @@ if __name__ == '__main__':
             run_on_all_clusters(basepath, clusters_data, logger, auto_delete=auto_delete, confirm=confirm)
         else:
             # Single cluster mode - user said 'n' to multiple clusters
-            cluster = get_object_for_single_operation(basepath, 'CUCM')
+            cluster = get_object_for_single_operation(basepath, 'CUCM', server_type='publisher')
             if not cluster:
                 print("Error: Unable to load cluster information")
                 sys.exit(1)
@@ -427,7 +427,7 @@ if __name__ == '__main__':
 
     else:
         # No clusters found in CSV - single cluster mode with manual input
-        cluster = get_object_for_single_operation(basepath, 'CUCM')
+        cluster = get_object_for_single_operation(basepath, 'CUCM', server_type='publisher')
         if not cluster:
             print("Error: Unable to load cluster information")
             sys.exit(1)
