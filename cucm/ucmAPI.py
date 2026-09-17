@@ -1772,6 +1772,7 @@ class AXL(object):
             fullResp = self.service.listPhoneButtonTemplate(
                     {'name': '%'}, returnedTags={
                         'name': '',
+                        'isUserModifiable': '',
                     })
             if fullResp['return'] == None:
                 resp = ''

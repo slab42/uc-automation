@@ -4,10 +4,10 @@ import warnings
 warnings.simplefilter('ignore')
 
 """
-Clean up unused phone button templates that begin with SEP
+Clean up unused phone button templates matching a search text
 
 This script identifies and optionally deletes phone button templates that:
-1. Have names beginning with 'SEP'
+1. Have names containing a user-specified text (e.g., 'SEP', 'TEST', etc.)
 2. Are not assigned to any phones in the system
 
 Results are displayed on screen and logged to file.
@@ -19,7 +19,8 @@ Usage:
   python3 clean_unused_phone_button_templates.py --default     (same as -D)
 
 Default behavior (no flags):
-  - Lists all unused templates
+  - Prompts for search text (e.g., 'SEP', 'TEST', 'CUSTOM', etc.)
+  - Lists all unused templates containing that text anywhere in the name
   - Prompts user: "Delete these X unused template(s)?"
   - If yes: deletes with confirmation for each template
   - If no: exits without deletion
@@ -38,9 +39,12 @@ from setup.multi_object_loader import get_object_for_single_operation, load_cred
 from ucmAPI import AXL
 
 
-def find_unused_templates(axl, logger):
-    """Find phone button templates starting with SEP that are not in use
-    :return: Tuple of (all_sep_templates, unused_templates)
+def find_unused_templates(axl, logger, search_text='SEP'):
+    """Find phone button templates containing search_text that are not in use
+    :param axl: AXL client
+    :param logger: Logger instance
+    :param search_text: Text to search for anywhere in template name (default: 'SEP')
+    :return: Tuple of (all_matching_templates, unused_templates)
     """
     logger.info('Retrieving all phone button templates...')
 
@@ -61,13 +65,26 @@ def find_unused_templates(axl, logger):
 
     logger.info('Found %d total phone button templates', len(templates))
 
-    # Filter templates starting with SEP
-    sep_templates = [t.get('name') for t in templates if isinstance(t, dict) and t.get('name', '').startswith('SEP')]
-    sep_templates = sorted([t for t in sep_templates if t])
-    logger.info('Found %d templates starting with SEP', len(sep_templates))
+    # Filter templates containing the search text and that are user-modifiable
+    matching_templates = []
+    for t in templates:
+        if isinstance(t, dict):
+            name = t.get('name')
+            is_user_modifiable = t.get('isUserModifiable')
+            if name and search_text in name:
+                # Check if template is user-modifiable (handle both boolean and string representations)
+                is_modifiable = is_user_modifiable and str(is_user_modifiable).lower() != 'false'
+                if is_modifiable:
+                    matching_templates.append(name)
+                    logger.debug('Template %s is user-modifiable', name)
+                else:
+                    logger.debug('Skipping template %s (not user-modifiable, isUserModifiable=%s)', name, is_user_modifiable)
 
-    if not sep_templates:
-        logger.info('No templates starting with SEP found')
+    matching_templates = sorted(list(set(matching_templates)))
+    logger.info('Found %d user-modifiable templates containing %s', len(matching_templates), search_text)
+
+    if not matching_templates:
+        logger.info('No templates containing %s found', search_text)
         return [], []
 
     # Collect all template names in use
@@ -144,25 +161,31 @@ def find_unused_templates(axl, logger):
 
     logger.info('%d unique templates are in use', len(templates_in_use))
 
-    # Find unused SEP templates
+    # Find unused templates matching the prefix
     unused_templates = []
-    for template_name in sep_templates:
+    for template_name in matching_templates:
         if template_name not in templates_in_use:
             unused_templates.append(template_name)
             logger.info('Found unused template: %s', template_name)
 
-    return sep_templates, sorted(unused_templates)
+    return matching_templates, sorted(unused_templates)
 
 
-def display_results(axl, all_sep_templates, unused_templates, logger):
-    """Display results in a formatted way showing both unused and in-use templates"""
+def display_results(axl, all_matching_templates, unused_templates, logger, search_text='SEP'):
+    """Display results in a formatted way showing both unused and in-use templates
+    :param axl: AXL client
+    :param all_matching_templates: All templates matching the search text
+    :param unused_templates: List of unused templates
+    :param logger: Logger instance
+    :param search_text: Text being searched for
+    """
 
     # Determine which templates are in use
-    in_use_templates = [t for t in all_sep_templates if t not in unused_templates]
+    in_use_templates = [t for t in all_matching_templates if t not in unused_templates]
 
     # Display unused templates
     print('\n' + '=' * 70)
-    print('UNUSED PHONE BUTTON TEMPLATES (Starting with SEP)')
+    print(f'UNUSED PHONE BUTTON TEMPLATES (Containing {search_text})')
     print('=' * 70)
 
     if not unused_templates:
@@ -176,12 +199,12 @@ def display_results(axl, all_sep_templates, unused_templates, logger):
 
     # Display in-use templates
     print('\n' + '=' * 70)
-    print('IN-USE PHONE BUTTON TEMPLATES (Starting with SEP)')
+    print(f'IN-USE PHONE BUTTON TEMPLATES (Containing {search_text})')
     print('=' * 70)
 
     if not in_use_templates:
-        print('\nNo SEP templates are currently in use.')
-        logger.info('No SEP templates are in use')
+        print(f'\nNo templates containing {search_text} are currently in use.')
+        logger.info('No templates containing %s are in use', search_text)
     else:
         print(f'\nFound {len(in_use_templates)} in-use template(s):\n')
         for idx, template in enumerate(in_use_templates, 1):
@@ -193,6 +216,16 @@ def display_results(axl, all_sep_templates, unused_templates, logger):
     print('=' * 70 + '\n')
 
     return len(unused_templates) == 0
+
+
+def prompt_for_search_text():
+    """Prompt user for the search text to use when finding templates
+    :return: Search text string (default: 'SEP')
+    """
+    text = input('Enter text to search for in template names (default: SEP): ').strip()
+    if not text:
+        text = 'SEP'
+    return text
 
 
 def prompt_for_deletion(unused_templates, logger):
@@ -278,8 +311,15 @@ def delete_templates(axl, unused_templates, logger, auto_delete=False, confirm=T
     return deleted_count
 
 
-def run_operation_on_cluster(basepath, cluster_data, logger, auto_delete=False, confirm=True):
-    """Run the find and optional delete operation on a single cluster"""
+def run_operation_on_cluster(basepath, cluster_data, logger, search_text='SEP', auto_delete=False, confirm=True):
+    """Run the find and optional delete operation on a single cluster
+    :param basepath: Base path for schema files
+    :param cluster_data: Cluster configuration dict
+    :param logger: Logger instance
+    :param search_text: Text to search for in template names
+    :param auto_delete: If True, delete without confirmation
+    :param confirm: If True, ask for confirmation before deletion
+    """
     try:
         cluster_name = cluster_data['name']
         server = cluster_data['server']
@@ -297,8 +337,8 @@ def run_operation_on_cluster(basepath, cluster_data, logger, auto_delete=False, 
         logger.info('Processing cluster: %s (%s)', cluster_name, server)
         logger.info('=' * 60)
 
-        all_sep_templates, unused_templates = find_unused_templates(axl, logger)
-        is_empty = display_results(axl, all_sep_templates, unused_templates, logger)
+        all_matching_templates, unused_templates = find_unused_templates(axl, logger, search_text=search_text)
+        is_empty = display_results(axl, all_matching_templates, unused_templates, logger, search_text=search_text)
 
         if not is_empty:
             if confirm or auto_delete:
@@ -324,8 +364,15 @@ def run_operation_on_cluster(basepath, cluster_data, logger, auto_delete=False, 
         return False
 
 
-def run_on_all_clusters(basepath, clusters_data, logger, auto_delete=False, confirm=True):
-    """Run operation on all clusters sequentially"""
+def run_on_all_clusters(basepath, clusters_data, logger, search_text='SEP', auto_delete=False, confirm=True):
+    """Run operation on all clusters sequentially
+    :param basepath: Base path for schema files
+    :param clusters_data: List of cluster configurations
+    :param logger: Logger instance
+    :param search_text: Text to search for in template names
+    :param auto_delete: If True, delete without confirmation
+    :param confirm: If True, ask for confirmation before deletion
+    """
     print(f"\nProcessing {len(clusters_data)} clusters...\n")
 
     # Load credentials using the new loader
@@ -340,7 +387,7 @@ def run_on_all_clusters(basepath, clusters_data, logger, auto_delete=False, conf
     failed = 0
 
     for cluster in clusters_data:
-        if run_operation_on_cluster(basepath, cluster, logger, auto_delete=auto_delete, confirm=confirm):
+        if run_operation_on_cluster(basepath, cluster, logger, search_text=search_text, auto_delete=auto_delete, confirm=confirm):
             successful += 1
         else:
             failed += 1
@@ -377,6 +424,10 @@ if __name__ == '__main__':
     else:
         logger.info("Mode: List only (no deletion)")
 
+    # Prompt for search text
+    search_text = prompt_for_search_text()
+    logger.info("Search text: %s", search_text)
+
     use_multiple = False
 
     clusters_data = get_objects_for_multi_operation(basepath, 'CUCM', server_type='publisher')
@@ -388,7 +439,7 @@ if __name__ == '__main__':
                 print("No clusters found in clusters.csv")
                 exit(1)
 
-            run_on_all_clusters(basepath, clusters_data, logger, auto_delete=auto_delete, confirm=confirm)
+            run_on_all_clusters(basepath, clusters_data, logger, search_text=search_text, auto_delete=auto_delete, confirm=confirm)
         else:
             # Single cluster mode - user said 'n' to multiple clusters
             cluster = get_object_for_single_operation(basepath, 'CUCM', server_type='publisher')
@@ -405,8 +456,8 @@ if __name__ == '__main__':
             wsdl = wsdl_dir.absolute().as_uri()
             axl = AXL(username=username, password=password, wsdl=wsdl, cucm=server, cucm_version=version)
 
-            all_sep_templates, unused_templates = find_unused_templates(axl, logger)
-            is_empty = display_results(axl, all_sep_templates, unused_templates, logger)
+            all_matching_templates, unused_templates = find_unused_templates(axl, logger, search_text=search_text)
+            is_empty = display_results(axl, all_matching_templates, unused_templates, logger, search_text=search_text)
 
             if not is_empty:
                 if should_delete:
@@ -439,8 +490,8 @@ if __name__ == '__main__':
         wsdl = wsdl_dir.absolute().as_uri()
         axl = AXL(username=username, password=password, wsdl=wsdl, cucm=server, cucm_version=version)
 
-        all_sep_templates, unused_templates = find_unused_templates(axl, logger)
-        is_empty = display_results(axl, all_sep_templates, unused_templates, logger)
+        all_matching_templates, unused_templates = find_unused_templates(axl, logger, search_text=search_text)
+        is_empty = display_results(axl, all_matching_templates, unused_templates, logger, search_text=search_text)
 
         if not is_empty:
             if should_delete:
