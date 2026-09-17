@@ -364,7 +364,7 @@ def main(basepath, logger, mode, data, em_server=None, use_multiple_clusters=Fal
             if use_multiple_clusters and clusters_data:
                 results = run_check_on_all_clusters(basepath, clusters_data, data, logger)
             else:
-                cluster = get_object_for_single_operation(basepath, 'CUCM')
+                cluster = get_object_for_single_operation(basepath, 'CUCM', server_type='em')
                 if not cluster:
                     print("Error: Unable to load CUCM cluster information")
                     logger.error("Unable to load CUCM cluster information")
@@ -416,7 +416,7 @@ if __name__ == '__main__':
         basepath = Path(__file__).parent
 
         # Load cluster and credentials
-        cluster = get_object_for_single_operation(basepath, 'CUCM')
+        cluster = get_object_for_single_operation(basepath, 'CUCM', server_type='em')
         if not cluster:
             print("Error: Unable to load CUCM cluster")
             sys.exit(1)
@@ -466,7 +466,7 @@ if __name__ == '__main__':
     em_server = None
 
     if mode == "check":
-        clusters_data = get_objects_for_multi_operation(basepath, 'CUCM')
+        clusters_data = get_objects_for_multi_operation(basepath, 'CUCM', server_type='em')
         if clusters_data:
             response = input(f'{len(clusters_data)} clusters found. Use multiple clusters? (y/n) [default: n]: ') or 'n'
             if response.lower() in ('y', 'yes'):
