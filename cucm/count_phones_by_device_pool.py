@@ -38,6 +38,7 @@ import time
 import urllib3
 import csv
 from setup.logger import setup_logger
+from setup.prompt_utils import prompt_yes_no
 from setup.multi_object_loader import (
     get_object_for_single_operation,
     load_credentials,
@@ -186,8 +187,8 @@ def run_report(axl, logger, server, include_analog=False):
         display_results(rows, logger, include_analog=include_analog)
 
         # Ask whether to save to CSV
-        save_csv_input = input('\nSave results to CSV?: (y/n) ') or 'n'
-        if save_csv_input.lower() in ('y', 'yes'):
+        save_csv = prompt_yes_no('\nSave results to CSV?', default=False)
+        if save_csv:
             timestamp = time.strftime("%Y_%m_%d-%H_%M_%S")
             if server:
                 csv_filename = f'phone-count-{server}-{timestamp}.csv'
@@ -235,8 +236,7 @@ def run_on_all_clusters(basepath, clusters_data, operation_params, logger):
     print("="*80)
     print("Loading Credentials")
     print("="*80)
-    use_same = input('Use same credentials for all clusters? (y/n) [default: y]: ').strip().lower()
-    use_same = use_same in ('', 'y', 'yes')
+    use_same = prompt_yes_no('Use same credentials for all clusters?', default=True)
 
     cluster_credentials = load_credentials_for_multi_objects('CUCM', clusters_data, use_same=use_same)
 
@@ -307,14 +307,14 @@ if __name__ == '__main__':
     logger.info("Count Phones By Device Pool - Started")
 
     # Ask whether to skip analog devices and CTI ports
-    skip_analog_input = input('Skip analog devices and CTI ports?: (y/n) ') or 'y'
-    include_analog = skip_analog_input.lower() not in ('y', 'yes')
+    skip_analog = prompt_yes_no('Skip analog devices and CTI ports?', default=True)
+    include_analog = not skip_analog
     operation_params = {'include_analog': include_analog}
 
     clusters_data = get_objects_for_multi_operation(basepath, 'CUCM', server_type='publisher')
     if clusters_data:
-        response = input(f'{len(clusters_data)} clusters found. Use multiple clusters?: (y/n) ') or 'n'
-        if response.lower() in ('y', 'yes'):
+        use_multiple = prompt_yes_no(f'{len(clusters_data)} clusters found. Use multiple clusters?', default=False)
+        if use_multiple:
             run_on_all_clusters(basepath, clusters_data, operation_params, logger)
         else:
             cluster = get_object_for_single_operation(basepath, 'CUCM', server_type='publisher')

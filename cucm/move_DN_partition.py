@@ -43,6 +43,7 @@ import argparse
 from datetime import datetime
 import urllib3
 from setup.logger import setup_logger
+from setup.prompt_utils import prompt_yes_no
 from setup.multi_object_loader import (
     get_object_for_single_operation,
     load_credentials,
@@ -154,8 +155,7 @@ def run_on_all_clusters(basepath, clusters_data, operation_params, logger):
     print("="*80)
     print("Loading Credentials")
     print("="*80)
-    use_same = input('Use same credentials for all clusters? (y/n) [default: y]: ').strip().lower()
-    use_same = use_same in ('', 'y', 'yes')
+    use_same = prompt_yes_no('Use same credentials for all clusters?', default=True)
 
     cluster_credentials = load_credentials_for_multi_objects('CUCM', clusters_data, use_same=use_same)
 
@@ -189,11 +189,11 @@ if __name__ == '__main__':
 
     clusters_data = get_objects_for_multi_operation(basepath, 'CUCM', server_type='publisher')
     if clusters_data:
-        response = input(f'{len(clusters_data)} clusters found. Use multiple clusters?: (y/n) ') or 'n'
-        if response.lower() in ('y', 'yes'):
+        use_multiple = prompt_yes_no(f'{len(clusters_data)} clusters found. Use multiple clusters?', default=False)
+        if use_multiple:
             # Gather operation parameters for multi-cluster
-            input_type_csv = input('Use CSV?: (y/n)') or 'n'
-            if str(input_type_csv) in ("Yes", "yes", "Y", "y"):
+            use_csv = prompt_yes_no('Use CSV?', default=False)
+            if use_csv:
                 print('\nCSV Must have header row and must contain only 1 DN per row')
                 print('Field Order: pattern, routePartition, newRoutePartition')
                 csv_file = input('Enter CSV file name or full path: ') or 'mv_dnPartitions.csv'
@@ -215,8 +215,8 @@ if __name__ == '__main__':
             wsdl = wsdl_dir.absolute().as_uri()
             axl = AXL(username=username, password=password, wsdl=wsdl, cucm=server, cucm_version=version)
 
-            input_type_csv = input('Use CSV?: (y/n)') or 'n'
-            if str(input_type_csv) in ("Yes", "yes", "Y", "y"):
+            use_csv = prompt_yes_no('Use CSV?', default=False)
+            if use_csv:
                 print('\nCSV Must have header row and must contain only 1 DN per row')
                 print('Field Order: pattern, routePartition, newRoutePartition')
                 csv_file = input('Enter CSV file name or full path: ') or 'mv_dnPartitions.csv'
@@ -237,8 +237,8 @@ if __name__ == '__main__':
         wsdl = wsdl_dir.absolute().as_uri()
         axl = AXL(username=username, password=password, wsdl=wsdl, cucm=server, cucm_version=version)
 
-        input_type_csv = input('Use CSV?: (y/n)') or 'n'
-        if str(input_type_csv) in ("Yes", "yes", "Y", "y"):
+        use_csv = prompt_yes_no('Use CSV?', default=False)
+        if use_csv:
             print('\nCSV Must have header row and must contain only 1 DN per row')
             print('Field Order: pattern, routePartition, newRoutePartition')
             csv_file = input('Enter CSV file name or full path: ') or 'mv_dnPartitions.csv'

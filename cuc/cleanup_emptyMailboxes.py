@@ -41,6 +41,7 @@ from requests.auth import HTTPBasicAuth
 from datetime import datetime
 from lxml import etree
 from setup.logger import setup_logger
+from setup.prompt_utils import prompt_yes_no
 from setup.multi_object_loader import get_object_for_single_operation, load_credentials
 
 log_filename_prefix = 'cleanup-emptyMailboxes-'
@@ -207,8 +208,7 @@ def process_mailboxes(http_session, cuc_server, input_file, output_file, prompt_
                             # Empty mailbox - attempt to delete it
                             should_delete = True
                             if prompt_for_deletes:
-                                response = input(f'Delete empty mailbox for {dtmf_access_id} ({alias})? (y/n): ')
-                                should_delete = response.lower() in ('y', 'yes')
+                                should_delete = prompt_yes_no(f'Delete empty mailbox for {dtmf_access_id} ({alias})?', default=False)
 
                             if should_delete:
                                 delete_result = delete_mailbox(http_session, cuc_server, dtmf_access_id, user_uri)
@@ -250,8 +250,7 @@ def process_mailboxes(http_session, cuc_server, input_file, output_file, prompt_
 def main():
     """Main menu and workflow."""
     while True:
-        prompt_input = input('Prompt for deletes?: (y/n) ') or 'n'
-        prompt_for_deletes = prompt_input.lower() in ('y', 'yes')
+        prompt_for_deletes = prompt_yes_no('Prompt for deletes?', default=False)
         break
 
     input_file = input('Input CSV file name (default: mailboxes.csv): ') or 'mailboxes.csv'

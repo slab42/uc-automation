@@ -47,6 +47,7 @@ from requests.auth import HTTPBasicAuth
 from datetime import datetime
 from lxml import etree
 from setup.logger import setup_logger
+from setup.prompt_utils import prompt_yes_no
 from setup.multi_object_loader import get_object_for_single_operation, load_credentials
 
 log_filename_prefix = 'check-userMailboxUsage-'
@@ -208,8 +209,8 @@ def use_csv():
 def main():
     """Menu to choose single user or CSV list."""
     while True:
-        input_type_csv = input('Use CSV?: (y/n) ') or 'n'
-        if str(input_type_csv) in ("Yes", "yes", "Y", "y"):
+        use_csv_mode = prompt_yes_no('Use CSV?', default=False)
+        if use_csv_mode:
             use_csv()
             break
         else:

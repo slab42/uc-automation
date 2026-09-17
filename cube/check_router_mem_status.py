@@ -43,6 +43,7 @@ SSH_TIMEOUT = 15
 # Add parent directory to path to import from setup
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from setup.logger import setup_logger
+from setup.prompt_utils import prompt_yes_no
 from setup.env_loader import EnvironmentConfig, CredentialsLoader
 from setup.var_loader import load_customer_variables
 
@@ -316,13 +317,13 @@ def main():
         if default_creds and default_creds['username']:
             print("\nFound default credentials in credentials.env")
             if args.default:
-                use_stored = "y"
+                use_stored = True
                 print("Using stored credentials (--default flag set)")
                 logger.info("Using stored credentials (--default flag set)")
             else:
-                use_stored = input("Use stored credentials? (y/n) [default: y]: ").strip().lower() or "y"
+                use_stored = prompt_yes_no("Use stored credentials?", default=True)
 
-            if use_stored == "y":
+            if use_stored:
                 username = default_creds['username']
                 password = default_creds['password']
                 if not password:
@@ -393,13 +394,13 @@ def main():
 
     print("\n" + "="*80)
     if args.default:
-        send_email = "y"
+        send_email = True
         print("Sending summary email (--default flag set)")
         logger.info("Sending summary email (--default flag set)")
     else:
-        send_email = input("Send summary email? (y/n): ").strip().lower() or "y"
+        send_email = prompt_yes_no("Send summary email?", default=True)
 
-    if send_email == 'y':
+    if send_email:
         send_summary_email(results, timestamp, logger, email_cfg, low_memory_threshold)
 
 

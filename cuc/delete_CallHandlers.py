@@ -34,6 +34,7 @@ import urllib3
 from requests.auth import HTTPBasicAuth
 from datetime import datetime
 from setup.logger import setup_logger
+from setup.prompt_utils import prompt_yes_no
 from setup.multi_object_loader import get_object_for_single_operation, load_credentials
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -106,7 +107,7 @@ def delete_call_handler(http_session, cuc_server, handler_name, object_id):
 
 def main(http_session, cuc_server, logger):
     """Main menu and operation logic."""
-    prompt_deletes = input('Prompt for deletes?: (y/n) ').strip().lower() == 'y'
+    prompt_deletes = prompt_yes_no('Prompt for deletes?', default=False)
     csv_file = input('Input CSV file name (callhandlers.csv): ').strip() or 'callhandlers.csv'
 
     if not Path(csv_file).exists():
@@ -133,8 +134,8 @@ def main(http_session, cuc_server, logger):
             object_id = handler.get('objectId', '')
 
             if prompt_deletes:
-                confirm = input(f'Delete "{display_name}"? (y/n): ').strip().lower()
-                if confirm != 'y':
+                confirm_delete = prompt_yes_no(f'Delete "{display_name}"?', default=False)
+                if not confirm_delete:
                     logger.info(f'Skipped: {display_name}')
                     print(f'Skipped: {display_name}')
                     continue

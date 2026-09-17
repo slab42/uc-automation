@@ -33,6 +33,7 @@ import argparse
 from datetime import datetime
 import urllib3
 from setup.logger import setup_logger
+from setup.prompt_utils import prompt_yes_no
 from setup.multi_object_loader import get_object_for_single_operation, load_credentials, get_objects_for_multi_operation, load_credentials_for_multi_objects
 from ucmAPI import AXL
 
@@ -200,8 +201,8 @@ def prompt_for_deletion(unused_templates, logger):
     :param logger: Logger instance
     :return: True if user wants to delete, False otherwise
     """
-    response = input(f'\nDelete these {len(unused_templates)} unused template(s)? (y/n): ').strip().lower()
-    if response in ('y', 'yes'):
+    confirmed = prompt_yes_no(f'\nDelete these {len(unused_templates)} unused template(s)?', default=False)
+    if confirmed:
         logger.info('User confirmed deletion of %d templates', len(unused_templates))
         return True
     else:
@@ -381,9 +382,7 @@ if __name__ == '__main__':
 
     clusters_data = get_objects_for_multi_operation(basepath, 'CUCM', server_type='publisher')
     if clusters_data:
-        response = input(f'{len(clusters_data)} clusters found. Use multiple clusters?: (y/n) ') or 'n'
-        if response.lower() in ('y', 'yes'):
-            use_multiple = True
+        use_multiple = prompt_yes_no(f'{len(clusters_data)} clusters found. Use multiple clusters?', default=False)
 
         if use_multiple:
             if not clusters_data:

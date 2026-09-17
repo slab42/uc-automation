@@ -49,6 +49,7 @@ from datetime import datetime
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from setup.logger import setup_logger
+from setup.prompt_utils import prompt_yes_no
 from setup.multi_object_loader import get_object_for_single_operation, load_credentials, get_objects_for_multi_operation, load_credentials_for_multi_objects
 from ucmAPI import AXL
 
@@ -315,8 +316,7 @@ def run_check_on_all_clusters(basepath, clusters_data, data, logger):
     print("="*80)
     print("Loading Credentials")
     print("="*80)
-    use_same = input('Use same credentials for all clusters? (y/n) [default: y]: ').strip().lower()
-    use_same = use_same in ('', 'y', 'yes')
+    use_same = prompt_yes_no('Use same credentials for all clusters?', default=True)
 
     cluster_credentials = load_credentials_for_multi_objects('CUCM', clusters_data, use_same=use_same)
 
@@ -468,9 +468,7 @@ if __name__ == '__main__':
     if mode == "check":
         clusters_data = get_objects_for_multi_operation(basepath, 'CUCM', server_type='em')
         if clusters_data:
-            response = input(f'{len(clusters_data)} clusters found. Use multiple clusters? (y/n) [default: n]: ') or 'n'
-            if response.lower() in ('y', 'yes'):
-                use_multiple_clusters = True
+            use_multiple_clusters = prompt_yes_no(f'{len(clusters_data)} clusters found. Use multiple clusters?', default=False)
     else:
         # For login/logout, get EM server
         em_server = get_em_server()
