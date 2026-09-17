@@ -101,8 +101,8 @@ totalUsers = len(userEmails)
 #############  User Confirmation  #############
 # Check to make sure they want to delete the number of users found in the input CSV file
 print('Total Users to Delete:', str(totalUsers))
-proceed = input('Do you want to proceed?  (Y/N)  ')
-if proceed.upper() != 'Y' and proceed.upper() != 'YES':
+proceed = prompt_yes_no('Do you want to proceed?', default=False)
+if not proceed:
     print('You have chosen to quit without deleting users.  Ending script.\n')
     exit()
 print('Delete in progress.  Please wait, the script takes 2 - 3 seconds per user on average...\n')

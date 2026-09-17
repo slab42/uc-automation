@@ -196,8 +196,8 @@ if __name__ == '__main__':
             wsdl = wsdl_dir.absolute().as_uri()
             axl = AXL(username=username, password=password, wsdl=wsdl, cucm=server, cucm_version=version)
 
-            input_type_csv = input('Use CSV?: (y/n)') or 'n'
-            if str(input_type_csv) in ("Yes", "yes", "Y", "y"):
+            input_type_csv = prompt_yes_no('Use CSV?', default=False)
+            if input_type_csv:
                 print('\nCSV Must have header row. Required columns: pattern (routePartition optional)')
                 print('Additional columns are allowed and will be ignored')
                 csv_file = input('Enter CSV file name or full path (default filename: rm_dnAltNumbers.csv): ') or 'rm_dnAltNumbers.csv'
@@ -218,8 +218,8 @@ if __name__ == '__main__':
         wsdl = wsdl_dir.absolute().as_uri()
         axl = AXL(username=username, password=password, wsdl=wsdl, cucm=server, cucm_version=version)
 
-        input_type_csv = input('Use CSV?: (y/n)') or 'n'
-        if str(input_type_csv) in ("Yes", "yes", "Y", "y"):
+        input_type_csv = prompt_yes_no('Use CSV?', default=False)
+        if input_type_csv:
             print('\nCSV Must have header row. Required columns: pattern (routePartition optional)')
             print('Additional columns are allowed and will be ignored')
             csv_file = input('Enter CSV file name or full path (default filename: rm_dnAltNumbers.csv): ') or 'rm_dnAltNumbers.csv'

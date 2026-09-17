@@ -335,8 +335,8 @@ if __name__ == '__main__':
             http_session.auth = HTTPBasicAuth(username, password)
             http_session.headers.update({'Content-Type': 'application/json'})
 
-            input_type_csv = input('Use CSV?: (y/n) ') or 'n'
-            if str(input_type_csv) in ("Yes", "yes", "Y", "y"):
+            input_type_csv = prompt_yes_no('Use CSV?', default=False)
+            if input_type_csv:
                 print('\nCSV must have a header row and contain one extension per row')
                 print('Field: extension')
                 csv_file = input('Enter CSV file name or full path: ') or 'mailboxes.csv'
@@ -361,8 +361,8 @@ if __name__ == '__main__':
         http_session.auth = HTTPBasicAuth(username, password)
         http_session.headers.update({'Content-Type': 'application/json'})
 
-        input_type_csv = input('Use CSV?: (y/n) ') or 'n'
-        if str(input_type_csv) in ("Yes", "yes", "Y", "y"):
+        input_type_csv = prompt_yes_no('Use CSV?', default=False)
+        if input_type_csv:
             print('\nCSV must have a header row and contain one extension per row')
             print('Field: extension')
             csv_file = input('Enter CSV file name or full path: ') or 'mailboxes.csv'

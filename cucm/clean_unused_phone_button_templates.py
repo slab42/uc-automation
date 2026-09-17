@@ -332,8 +332,7 @@ def run_on_all_clusters(basepath, clusters_data, logger, auto_delete=False, conf
     print("="*80)
     print("Loading Credentials")
     print("="*80)
-    use_same = input('Use same credentials for all clusters? (y/n) [default: y]: ').strip().lower()
-    use_same = use_same in ('', 'y', 'yes')
+    use_same = prompt_yes_no('Use same credentials for all clusters?', default=True)
 
     cluster_credentials = load_credentials_for_multi_objects('CUCM', clusters_data, use_same=use_same)
 
