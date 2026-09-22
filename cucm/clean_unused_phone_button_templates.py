@@ -320,6 +320,8 @@ def run_operation_on_cluster(basepath, cluster_data, logger, search_text='SEP', 
     :param auto_delete: If True, delete without confirmation
     :param confirm: If True, ask for confirmation before deletion
     """
+    cluster_name = cluster_data.get('name', 'unknown')
+    server = cluster_data.get('server', 'unknown')
     try:
         cluster_name = cluster_data['name']
         server = cluster_data['server']
@@ -359,8 +361,8 @@ def run_operation_on_cluster(basepath, cluster_data, logger, search_text='SEP', 
         print(f"✓ Completed {cluster_name} ({server})")
         return True
     except Exception as e:
-        print(f"✗ Failed on {cluster_name}: {str(e)}")
         logger.error('Error processing cluster %s: %s', cluster_name, str(e))
+        print(f"✗ Failed on {cluster_name}: {str(e)}")
         return False
 
 

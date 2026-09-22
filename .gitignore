@@ -139,8 +139,9 @@ foley.py
 test.py
 add_softphones.py
 
-# CSV Configs
+# CSV Configs or XLS
 *.csv
+*.xlsx
 
 # MAC DS Store
 .DS_Store

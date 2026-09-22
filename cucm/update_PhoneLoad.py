@@ -160,6 +160,8 @@ def run_csv_file(axl, logger, csv_file_path):
 
 def run_operation_on_cluster(basepath, cluster_data, operation_params, cluster_credentials, logger):
     """Run phone load update on a single cluster."""
+    cluster_name = cluster_data.get('name', 'unknown')
+    server = cluster_data.get('server', 'unknown')
     try:
         cluster_name = cluster_data['name']
         server = cluster_data['server']
@@ -186,8 +188,8 @@ def run_operation_on_cluster(basepath, cluster_data, operation_params, cluster_c
         print(f"✓ Completed {cluster_name} ({server})")
         return True
     except Exception as e:
-        print(f"✗ Failed on {cluster_name}: {str(e)}")
         logger.error(f"Exception on cluster {cluster_name}: {str(e)}")
+        print(f"✗ Failed on {cluster_name}: {str(e)}")
         return False
 
 
