@@ -1,4 +1,8 @@
 {
+  "logging": {
+    "console_log_level": "INFO"
+  },
+
   "email": {
     "mail_server": "mail.example.com",
     "mail_port": 25,

@@ -1785,6 +1785,19 @@ class AXL(object):
         except:
             return element
 
+    def _reconstruct_rows(self, fields, fields_per_row):
+        """Reconstruct rows from flat list of field dicts"""
+        rows = []
+        for i in range(0, len(fields), fields_per_row):
+            if i + fields_per_row - 1 < len(fields):
+                row = {}
+                for field_dict in fields[i:i+fields_per_row]:
+                    if isinstance(field_dict, dict):
+                        row.update(field_dict)
+                if row:
+                    rows.append(row)
+        return rows
+
 
     def list_phone_button_templates(self):
         """
@@ -1905,94 +1918,32 @@ class AXL(object):
 
     def list_softkey_templates(self):
         """
-        Get List of Softkey Templates using SQL query
-        Tries multiple possible column/table names to find softkey templates
-        DEBUG: Returns detailed info about which queries were attempted
-        :return: A list of dictionaries with template names
+        Get List of Softkey Templates with names
+        Queries softkeytemplate table to get both UUID and template names
+        Excludes system templates that cannot be deleted
+        :return: A list of dictionaries with template names and UUIDs
         """
         result = {
             'success': False,
             'response': [],
             'error': '',
-            'debug_info': {
-                'schema_columns_found': [],
-                'schema_query_attempted': False,
-                'fallback_queries_attempted': [],
-            }
         }
 
         try:
-            # Query syscolumns to find softkey-related columns in device table
-            schema_query = """
-            SELECT DISTINCT colname
-            FROM syscolumns
-            WHERE tabid IN (SELECT tabid FROM systables WHERE tabname = 'device')
-            AND LOWER(colname) LIKE '%softkey%'
-            """
+            # Query softkeytemplate table to get template names and UUIDs
+            query = "SELECT pkid, name, description FROM softkeytemplate ORDER BY name"
+            query_result = self.execute_sql_query(query)
+            if query_result.get('success') and query_result.get('response'):
+                # Reconstruct rows from flat field list
+                # Each row has 3 fields (pkid, name, description)
+                fields = query_result.get('response')
+                rows = self._reconstruct_rows(fields, 3)
 
-            result['debug_info']['schema_query_attempted'] = True
-            schema_resp = self.service.executeSQLQuery(sql=schema_query)
-            schema_resp = serialize_object(schema_resp)
-            softkey_cols = []
-
-            if schema_resp.get('return') and schema_resp['return'].get('row') is not None:
-                cols = schema_resp['return']['row']
-                if not isinstance(cols, list):
-                    cols = [cols]
-                for col_obj in cols:
-                    if isinstance(col_obj, dict):
-                        col_name = col_obj.get('colname')
-                    else:
-                        col_name = getattr(col_obj, 'colname', None)
-                    if col_name:
-                        softkey_cols.append(col_name)
-                        result['debug_info']['schema_columns_found'].append(col_name)
-
-            # If found softkey columns, query them
-            if softkey_cols:
-                for col_name in softkey_cols:
-                    try:
-                        query = f"SELECT DISTINCT {col_name} as name FROM device WHERE {col_name} IS NOT NULL ORDER BY {col_name}"
-                        resp = self.service.executeSQLQuery(sql=query)
-                        resp = serialize_object(resp)
-                        if resp.get('return') and resp['return'].get('row') is not None:
-                            rows = resp['return']['row']
-                            if not isinstance(rows, list):
-                                rows = [rows]
-                            if rows:
-                                result['success'] = True
-                                result['response'] = rows
-                                return serialize_object(result)
-                    except Fault as e:
-                        result['debug_info']['schema_columns_found'].append(f"{col_name} (query failed: {str(e)})")
-                        continue
-        except Fault as e:
-            result['debug_info']['schema_query_error'] = str(e)
-
-        # Fallback: try common column names
-        queries = [
-            "SELECT DISTINCT name FROM softkeytemplates ORDER BY name",
-            "SELECT DISTINCT fksoftkeytemplate FROM device WHERE fksoftkeytemplate IS NOT NULL ORDER BY fksoftkeytemplate",
-            "SELECT DISTINCT softkeytemplate FROM device WHERE softkeytemplate IS NOT NULL ORDER BY softkeytemplate",
-            "SELECT DISTINCT softkeyTemplate FROM device WHERE softkeyTemplate IS NOT NULL ORDER BY softkeyTemplate",
-        ]
-
-        for query in queries:
-            result['debug_info']['fallback_queries_attempted'].append(query)
-            try:
-                resp = self.service.executeSQLQuery(sql=query)
-                resp = serialize_object(resp)
-                if resp.get('return') and resp['return'].get('row') is not None:
-                    rows = resp['return']['row']
-                    if not isinstance(rows, list):
-                        rows = [rows]
-                    if rows:
-                        result['success'] = True
-                        result['response'] = rows
-                        return serialize_object(result)
-            except Fault as e:
-                result['debug_info']['fallback_queries_attempted'][-1] = f"{query} (failed: {str(e)})"
-                continue
+                result['success'] = True
+                result['response'] = rows
+                return serialize_object(result)
+        except Fault as error:
+            result['error'] = str(error)
 
         result['success'] = True
         result['response'] = []
@@ -2050,7 +2001,7 @@ class AXL(object):
         """
         Find all references to a softkey template using SQL query
         Tries multiple possible column names
-        :param template_name: Template name
+        :param template_name: Template name or UUID
         :return: result dictionary with list of devices/profiles using this template
         """
         result = {
@@ -2059,97 +2010,106 @@ class AXL(object):
             'error': '',
         }
 
+        # First, get the template UUID if a name was passed
+        template_uuid = template_name
+        if not template_name.startswith('{'):  # Check if it looks like a UUID
+            get_uuid_query = f"SELECT pkid FROM softkeytemplate WHERE name = '{template_name}'"
+            uuid_result = self.execute_sql_query(get_uuid_query)
+            if uuid_result.get('success') and uuid_result.get('response'):
+                fields = uuid_result.get('response')
+                if fields and isinstance(fields[0], dict):
+                    template_uuid = fields[0].get('pkid', template_name)
+
+        all_dependencies = []
+
+        # Query device table for phones
         try:
-            # Discover softkey column name from device table
-            schema_query = """
-            SELECT DISTINCT colname
-            FROM syscolumns
-            WHERE tabid IN (SELECT tabid FROM systables WHERE tabname = 'device')
-            AND LOWER(colname) LIKE '%softkey%'
-            LIMIT 1
+            query = f"""
+            SELECT DISTINCT device.name as name, 'Phone' as type
+            FROM device
+            WHERE device.fksoftkeytemplate = '{template_uuid}'
+            ORDER BY name
             """
-
-            schema_resp = self.service.executeSQLQuery(sql=schema_query)
-            schema_resp = serialize_object(schema_resp)
-            softkey_col = None
-
-            if schema_resp.get('return') and schema_resp['return'].get('row') is not None:
-                col_obj = schema_resp['return']['row']
-                if isinstance(col_obj, dict):
-                    softkey_col = col_obj.get('colname')
-                else:
-                    softkey_col = getattr(col_obj, 'colname', None)
-
-            if softkey_col:
-                try:
-                    query = f"""
-                    SELECT DISTINCT device.name as name, 'Device' as type
-                    FROM device
-                    WHERE device.{softkey_col} = '{template_name}'
-                    UNION
-                    SELECT DISTINCT deviceprofile.name as name, 'Device Profile' as type
-                    FROM deviceprofile
-                    WHERE deviceprofile.{softkey_col} = '{template_name}'
-                    UNION
-                    SELECT DISTINCT commonphoneconfig.name as name, 'Common Phone Config' as type
-                    FROM commonphoneconfig
-                    WHERE commonphoneconfig.{softkey_col} = '{template_name}'
-                    ORDER BY type, name
-                    """
-
-                    resp = self.service.executeSQLQuery(sql=query)
-                    resp = serialize_object(resp)
-                    if resp.get('return') and resp['return'].get('row') is not None:
-                        rows = resp['return']['row']
-                        if not isinstance(rows, list):
-                            rows = [rows]
-                        result['success'] = True
-                        result['response'] = rows
-                        return serialize_object(result)
-                except Fault:
-                    pass
+            query_result = self.execute_sql_query(query)
+            if query_result.get('success') and query_result.get('response'):
+                fields = query_result.get('response')
+                rows = self._reconstruct_rows(fields, 2)
+                all_dependencies.extend(rows)
         except Fault:
             pass
 
+        # Query commondeviceconfig table
+        try:
+            query = f"""
+            SELECT DISTINCT commondeviceconfig.name as name, 'Common Device Configuration' as type
+            FROM commondeviceconfig
+            WHERE commondeviceconfig.fksoftkeytemplate = '{template_uuid}'
+            ORDER BY name
+            """
+            query_result = self.execute_sql_query(query)
+            if query_result.get('success') and query_result.get('response'):
+                fields = query_result.get('response')
+                rows = self._reconstruct_rows(fields, 2)
+                all_dependencies.extend(rows)
+        except Fault:
+            pass
+
+        # Query deviceprofile table
+        try:
+            query = f"""
+            SELECT DISTINCT deviceprofile.name as name, 'Device Profile' as type
+            FROM deviceprofile
+            WHERE deviceprofile.fksoftkeytemplate = '{template_uuid}'
+            ORDER BY name
+            """
+            query_result = self.execute_sql_query(query)
+            if query_result.get('success') and query_result.get('response'):
+                fields = query_result.get('response')
+                rows = self._reconstruct_rows(fields, 2)
+                all_dependencies.extend(rows)
+        except Fault:
+            pass
+
+        if all_dependencies:
+            result['success'] = True
+            result['response'] = all_dependencies
+            return serialize_object(result)
+
         # Fallback: try different column name variations
-        column_variants = [
-            'fksoftkeytemplate',
-            'softkeytemplate',
-            'softkeyTemplate',
-            'sk_template',
-        ]
-
-        for col in column_variants:
-            try:
-                query = f"""
-                SELECT DISTINCT device.name as name, 'Device' as type
-                FROM device
-                WHERE device.{col} = '{template_name}'
-                UNION
-                SELECT DISTINCT deviceprofile.name as name, 'Device Profile' as type
-                FROM deviceprofile
-                WHERE deviceprofile.{col} = '{template_name}'
-                UNION
-                SELECT DISTINCT commonphoneconfig.name as name, 'Common Phone Config' as type
-                FROM commonphoneconfig
-                WHERE commonphoneconfig.{col} = '{template_name}'
-                ORDER BY type, name
-                """
-
-                resp = self.service.executeSQLQuery(sql=query)
-                resp = serialize_object(resp)
-                if resp.get('return') and resp['return'].get('row') is not None:
-                    rows = resp['return']['row']
-                    if not isinstance(rows, list):
-                        rows = [rows]
-                    result['success'] = True
-                    result['response'] = rows
-                    return serialize_object(result)
-            except Fault:
-                continue
-
         result['success'] = True
         result['response'] = []
+        result = serialize_object(result)
+        return result
+
+
+    def delete_softkey_template(self, name):
+        """
+        Delete a Softkey Template by name using SQL
+        :param name: Template name
+        :return: result dictionary
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+        try:
+            # Delete from softkeytemplate table by name
+            query = f"DELETE FROM softkeytemplate WHERE name = '{name}'"
+            delete_result = self.execute_sql_update(query)
+
+            if delete_result.get('success'):
+                result['success'] = True
+                result['response'] = f'Softkey Template "{name}" deleted successfully'
+            else:
+                result['response'] = 'ERROR'
+                result['error'] = delete_result.get('error', 'Failed to delete template')
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        except Exception as error:
+            result['response'] = 'ERROR'
+            result['error'] = str(error)
         result = serialize_object(result)
         return result
             

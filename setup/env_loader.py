@@ -49,6 +49,11 @@ class EnvironmentConfig:
         memory_config = self.config.get('router_memory_check', {})
         return memory_config.get('low_memory_threshold', 33)
 
+    def get_console_log_level(self):
+        """Get console logging level from config. Defaults to 'INFO'."""
+        logging_config = self.config.get('logging', {})
+        return logging_config.get('console_log_level', 'INFO')
+
 
 class CredentialsLoader:
     """Loads and manages credentials from credentials.env file."""

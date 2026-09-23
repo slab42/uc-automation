@@ -118,6 +118,53 @@ all_services = creds_loader.list_credentials()
 cucm_only = creds_loader.list_credentials('CUCM')
 ```
 
+## Logging Configuration
+
+Controls the verbosity of script console output. Configuration is checked in this order:
+1. **CONSOLE_LOG_LEVEL environment variable** (if set)
+2. **logging.console_log_level in customer_env.json** (if configured)
+3. **Default: INFO** (clean, minimal output)
+
+Valid values: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`
+
+### Configuration Methods
+
+**Option 1: Environment Variable (one-time)**
+```bash
+# Verbose output with debug messages
+export CONSOLE_LOG_LEVEL=DEBUG
+python3 cucm/list_softkey_templates.py
+
+# Quiet output (warnings and errors only)
+CONSOLE_LOG_LEVEL=WARNING python3 script.py
+```
+
+**Option 2: customer_env.json (persistent)**
+```json
+{
+  "logging": {
+    "console_log_level": "DEBUG"
+  }
+}
+```
+
+Now all scripts use DEBUG level on console without setting env vars:
+```bash
+python3 cucm/list_softkey_templates.py  # Uses DEBUG from config
+python3 cucm/move_DN_partition.py       # Uses DEBUG from config
+```
+
+**Option 3: Override config with env var**
+```bash
+# customer_env.json has DEBUG, but this script uses WARNING
+CONSOLE_LOG_LEVEL=WARNING python3 cucm/list_softkey_templates.py
+```
+
+**Behavior:**
+- Console (screen): Respects configured log level
+- Log file: Always captures DEBUG level for troubleshooting
+- Environment variable overrides customer_env.json setting
+
 ## Password Security
 
 ### Blank passwords (recommended)
