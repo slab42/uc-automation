@@ -2112,4 +2112,1119 @@ class AXL(object):
             result['error'] = str(error)
         result = serialize_object(result)
         return result
+
+
+    def _query_location_dependency(self, table_name, type_name, column_name, location_name):
+        """
+        Helper method to query a table for location dependencies
+        :param table_name: Database table name
+        :param type_name: Friendly name for the object type
+        :param column_name: Column name to search (locationname, location_id, etc)
+        :param location_name: Location name to search for
+        :return: List of dependency rows
+        """
+        dependencies = []
+        try:
+            query = f"""
+            SELECT DISTINCT {table_name}.name as name, '{type_name}' as type
+            FROM {table_name}
+            WHERE {table_name}.{column_name} = '{location_name}'
+            ORDER BY name
+            """
+            query_result = self.execute_sql_query(query)
+            if query_result.get('success') and query_result.get('response'):
+                fields = query_result.get('response')
+                rows = self._reconstruct_rows(fields, 2)
+                dependencies.extend(rows)
+        except Fault:
+            pass
+        return dependencies
+
+    def _query_location_dependency_by_fk(self, table_name, type_name, fk_column, location_name):
+        """
+        Helper method to query a table using location PKID (foreign key)
+        :param table_name: Database table name
+        :param type_name: Friendly name for the object type
+        :param fk_column: Foreign key column name (e.g., fklocation)
+        :param location_name: Location name
+        :return: List of dependency rows
+        """
+        dependencies = []
+        try:
+            # First, get the PKID of the location
+            query = f"SELECT pkid FROM location WHERE name = '{location_name}'"
+            location_pk_result = self.execute_sql_query(query)
+
+            if not location_pk_result.get('success') or not location_pk_result.get('response'):
+                return dependencies
+
+            # Extract the PKID
+            pk_field = location_pk_result.get('response')
+            if not pk_field or not isinstance(pk_field[0], dict):
+                return dependencies
+
+            location_pkid = pk_field[0].get('pkid')
+            if not location_pkid:
+                return dependencies
+
+            # Now query the target table using the foreign key
+            query = f"""
+            SELECT DISTINCT {table_name}.name as name, '{type_name}' as type
+            FROM {table_name}
+            WHERE {table_name}.{fk_column} = '{location_pkid}'
+            ORDER BY name
+            """
+            query_result = self.execute_sql_query(query)
+            if query_result.get('success') and query_result.get('response'):
+                fields = query_result.get('response')
+                rows = self._reconstruct_rows(fields, 2)
+                dependencies.extend(rows)
+        except Fault:
+            pass
+        return dependencies
+
+    def find_location_dependencies(self, location_name):
+        """
+        Find all references to a location using SQL query
+        :param location_name: Location name
+        :return: result dictionary with list of objects using this location
+        """
+        result = {
+            'success': False,
+            'response': [],
+            'error': '',
+        }
+
+        all_dependencies = []
+
+        # Try different possible column names for location references
+        location_columns = ['locationname', 'locationName', 'location_name']
+
+        # List of tables and their types to check
+        tables_to_check = [
+            ('devicepool', 'Device Pool'),
+            ('device', 'Device'),
+            ('deviceprofile', 'Device Profile'),
+            ('gatewayendpoint', 'Trunk'),
+            ('conferencebridge', 'Conference Bridge'),
+            ('mtp', 'Media Termination Point'),
+            ('mobilityhub', 'Mobility Hub'),
+        ]
+
+        # First, try to find dependencies with location name columns
+        for table_name, type_name in tables_to_check:
+            for col_name in location_columns:
+                deps = self._query_location_dependency(table_name, type_name, col_name, location_name)
+                if deps:
+                    all_dependencies.extend(deps)
+                    break  # Found the right column, move to next table
+
+        # If no dependencies found, try using foreign key with location PKID
+        if not all_dependencies:
+            fk_columns = ['fklocation', 'location_fk', 'location_pkid']
+            for table_name, type_name in tables_to_check:
+                for fk_col in fk_columns:
+                    deps = self._query_location_dependency_by_fk(table_name, type_name, fk_col, location_name)
+                    if deps:
+                        all_dependencies.extend(deps)
+                        break  # Found the right column, move to next table
+
+        if all_dependencies:
+            result['success'] = True
+            result['response'] = all_dependencies
+            return serialize_object(result)
+
+        result['success'] = True
+        result['response'] = []
+        result = serialize_object(result)
+        return result
+
+
+    def delete_location(self, name):
+        """
+        Delete a Location by name
+        :param name: Location name
+        :return: result dictionary
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+        try:
+            self.service.removeLocation(name=name)
+            result['success'] = True
+            result['response'] = f'Location "{name}" deleted successfully'
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        except Exception as error:
+            result['response'] = 'ERROR'
+            result['error'] = str(error)
+        result = serialize_object(result)
+        return result
+
+    def list_Regions(self):
+        """
+        Get List of Regions
+        :return: A list of dictionaries. If > 1000 records are returned, a list of list of dictionaries will be returned
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+        try:
+            fullResp = self.service.listRegion(
+                    {'name' : f'%'}, returnedTags={
+                        'name' : '',
+                    })
+            if fullResp['return'] == None:
+                resp = ''
+            else:
+                resp = fullResp['return']['region']
+            result['success'] = True
+            result['response'] = resp
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        result = serialize_object(result)
+        return result
+
+    def _query_region_dependency(self, table_name, type_name, column_name, region_name):
+        """
+        Helper method to query a table for region dependencies
+        :param table_name: Database table name
+        :param type_name: Friendly name for the object type
+        :param column_name: Column name to search (regionname, region_id, etc)
+        :param region_name: Region name to search for
+        :return: List of dependency rows
+        """
+        dependencies = []
+        try:
+            query = f"""
+            SELECT DISTINCT {table_name}.name as name, '{type_name}' as type
+            FROM {table_name}
+            WHERE {table_name}.{column_name} = '{region_name}'
+            ORDER BY name
+            """
+            query_result = self.execute_sql_query(query)
+            if query_result.get('success') and query_result.get('response'):
+                fields = query_result.get('response')
+                rows = self._reconstruct_rows(fields, 2)
+                dependencies.extend(rows)
+        except Fault:
+            pass
+        return dependencies
+
+    def _query_region_dependency_by_fk(self, table_name, type_name, fk_column, region_name):
+        """
+        Helper method to query a table using region PKID (foreign key)
+        :param table_name: Database table name
+        :param type_name: Friendly name for the object type
+        :param fk_column: Foreign key column name (e.g., fkregion)
+        :param region_name: Region name
+        :return: List of dependency rows
+        """
+        dependencies = []
+        try:
+            # First, get the PKID of the region
+            query = f"SELECT pkid FROM region WHERE name = '{region_name}'"
+            region_pk_result = self.execute_sql_query(query)
+
+            if not region_pk_result.get('success') or not region_pk_result.get('response'):
+                return dependencies
+
+            # Extract the PKID
+            pk_field = region_pk_result.get('response')
+            if not pk_field or not isinstance(pk_field[0], dict):
+                return dependencies
+
+            region_pkid = pk_field[0].get('pkid')
+            if not region_pkid:
+                return dependencies
+
+            # Now query the target table using the foreign key
+            query = f"""
+            SELECT DISTINCT {table_name}.name as name, '{type_name}' as type
+            FROM {table_name}
+            WHERE {table_name}.{fk_column} = '{region_pkid}'
+            ORDER BY name
+            """
+            query_result = self.execute_sql_query(query)
+            if query_result.get('success') and query_result.get('response'):
+                fields = query_result.get('response')
+                rows = self._reconstruct_rows(fields, 2)
+                dependencies.extend(rows)
+        except Fault:
+            pass
+        return dependencies
+
+    def find_region_dependencies(self, region_name):
+        """
+        Find all references to a region using SQL query
+        :param region_name: Region name
+        :return: result dictionary with list of objects using this region
+        """
+        result = {
+            'success': False,
+            'response': [],
+            'error': '',
+        }
+
+        all_dependencies = []
+
+        # Try different possible column names for region references
+        region_columns = ['regionname', 'regionName', 'region_name']
+
+        # List of tables and their types to check
+        tables_to_check = [
+            ('devicepool', 'Device Pool'),
+            ('device', 'Device'),
+            ('deviceprofile', 'Device Profile'),
+            ('gatewayendpoint', 'Trunk'),
+            ('conferencebridge', 'Conference Bridge'),
+            ('mtp', 'Media Termination Point'),
+        ]
+
+        # First, try to find dependencies with region name columns
+        for table_name, type_name in tables_to_check:
+            for col_name in region_columns:
+                deps = self._query_region_dependency(table_name, type_name, col_name, region_name)
+                if deps:
+                    all_dependencies.extend(deps)
+                    break  # Found the right column, move to next table
+
+        # If no dependencies found, try using foreign key with region PKID
+        if not all_dependencies:
+            fk_columns = ['fkregion', 'region_fk', 'region_pkid']
+            for table_name, type_name in tables_to_check:
+                for fk_col in fk_columns:
+                    deps = self._query_region_dependency_by_fk(table_name, type_name, fk_col, region_name)
+                    if deps:
+                        all_dependencies.extend(deps)
+                        break  # Found the right column, move to next table
+
+        if all_dependencies:
+            result['success'] = True
+            result['response'] = all_dependencies
+            return serialize_object(result)
+
+        result['success'] = True
+        result['response'] = []
+        result = serialize_object(result)
+        return result
+
+    def delete_region(self, name):
+        """
+        Delete a Region by name
+        :param name: Region name
+        :return: result dictionary
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+        try:
+            self.service.removeRegion(name=name)
+            result['success'] = True
+            result['response'] = f'Region "{name}" deleted successfully'
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        except Exception as error:
+            result['response'] = 'ERROR'
+            result['error'] = str(error)
+        result = serialize_object(result)
+        return result
+
+    def _query_partition_dependency(self, table_name, type_name, column_name, partition_name):
+        """
+        Helper method to query a table for partition dependencies
+        :param table_name: Database table name
+        :param type_name: Friendly name for the object type
+        :param column_name: Column name to search (routepartitionname, partition_name, etc)
+        :param partition_name: Partition name to search for
+        :return: List of dependency rows
+        """
+        dependencies = []
+        try:
+            query = f"""
+            SELECT DISTINCT {table_name}.name as name, '{type_name}' as type
+            FROM {table_name}
+            WHERE {table_name}.{column_name} = '{partition_name}'
+            ORDER BY name
+            """
+            query_result = self.execute_sql_query(query)
+            if query_result.get('success') and query_result.get('response'):
+                fields = query_result.get('response')
+                rows = self._reconstruct_rows(fields, 2)
+                dependencies.extend(rows)
+        except Fault:
+            pass
+        return dependencies
+
+    def _query_partition_dependency_by_fk(self, table_name, type_name, fk_column, partition_name):
+        """
+        Helper method to query a table using partition PKID (foreign key)
+        :param table_name: Database table name
+        :param type_name: Friendly name for the object type
+        :param fk_column: Foreign key column name (e.g., fkroutepartition)
+        :param partition_name: Partition name
+        :return: List of dependency rows
+        """
+        dependencies = []
+        try:
+            # First, get the PKID of the partition
+            query = f"SELECT pkid FROM routepartition WHERE name = '{partition_name}'"
+            partition_pk_result = self.execute_sql_query(query)
+
+            if not partition_pk_result.get('success') or not partition_pk_result.get('response'):
+                return dependencies
+
+            # Extract the PKID
+            pk_field = partition_pk_result.get('response')
+            if not pk_field or not isinstance(pk_field[0], dict):
+                return dependencies
+
+            partition_pkid = pk_field[0].get('pkid')
+            if not partition_pkid:
+                return dependencies
+
+            # Now query the target table using the foreign key
+            query = f"""
+            SELECT DISTINCT {table_name}.name as name, '{type_name}' as type
+            FROM {table_name}
+            WHERE {table_name}.{fk_column} = '{partition_pkid}'
+            ORDER BY name
+            """
+            query_result = self.execute_sql_query(query)
+            if query_result.get('success') and query_result.get('response'):
+                fields = query_result.get('response')
+                rows = self._reconstruct_rows(fields, 2)
+                dependencies.extend(rows)
+        except Fault:
+            pass
+        return dependencies
+
+    def find_partition_dependencies(self, partition_name):
+        """
+        Find all references to a partition using SQL query
+        :param partition_name: Partition name
+        :return: result dictionary with list of objects using this partition
+        """
+        result = {
+            'success': False,
+            'response': [],
+            'error': '',
+        }
+
+        all_dependencies = []
+        debug_info = []
+
+        # First, get the PKID of the partition
+        partition_pkid = None
+        try:
+            query = f"SELECT pkid FROM routepartition WHERE name = '{partition_name}'"
+            partition_pk_result = self.execute_sql_query(query)
+            debug_info.append(f"get partition pkid: {partition_pk_result}")
+
+            if partition_pk_result.get('success') and partition_pk_result.get('response'):
+                pk_field = partition_pk_result.get('response')
+                if pk_field and isinstance(pk_field[0], dict):
+                    partition_pkid = pk_field[0].get('pkid')
+                    debug_info.append(f"Found partition PKID: {partition_pkid}")
+        except Fault as e:
+            debug_info.append(f"get partition pkid fault: {str(e)}")
+
+        if not partition_pkid:
+            result['success'] = True
+            result['response'] = []
+            result['debug'] = debug_info
+            result = serialize_object(result)
+            return result
+
+        # Query numplan table for DNs (using FK)
+        try:
+            query = f"""
+            SELECT DISTINCT numplan.dnorpattern as name, 'DN' as type
+            FROM numplan
+            WHERE numplan.fkroutepartition = '{partition_pkid}'
+            ORDER BY name
+            """
+            query_result = self.execute_sql_query(query)
+            debug_info.append(f"numplan query: {query_result}")
+            if query_result.get('success') and query_result.get('response'):
+                fields = query_result.get('response')
+                rows = self._reconstruct_rows(fields, 2)
+                all_dependencies.extend(rows)
+        except Fault as e:
+            debug_info.append(f"numplan query fault: {str(e)}")
+
+        # Query route patterns (try multiple table names)
+        route_pattern_tables = ['dialrule', 'routepattern', 'callroute', 'dialplan']
+        for table_name in route_pattern_tables:
+            try:
+                query = f"""
+                SELECT DISTINCT {table_name}.pattern as name, 'Route Pattern' as type
+                FROM {table_name}
+                WHERE {table_name}.fkroutepartition = '{partition_pkid}'
+                ORDER BY name
+                """
+                query_result = self.execute_sql_query(query)
+                debug_info.append(f"{table_name} query: {query_result}")
+                if query_result.get('success') and query_result.get('response'):
+                    fields = query_result.get('response')
+                    rows = self._reconstruct_rows(fields, 2)
+                    all_dependencies.extend(rows)
+                    break  # Found the right table
+            except Fault as e:
+                debug_info.append(f"{table_name} query fault: {str(e)}")
+
+        # Query translation patterns (try multiple table names)
+        tranpattern_tables = ['tranpattern', 'translationpattern', 'translatepattern', 'tranrule']
+        for table_name in tranpattern_tables:
+            try:
+                query = f"""
+                SELECT DISTINCT {table_name}.pattern as name, 'Translation Pattern' as type
+                FROM {table_name}
+                WHERE {table_name}.fkroutepartition = '{partition_pkid}'
+                ORDER BY name
+                """
+                query_result = self.execute_sql_query(query)
+                debug_info.append(f"{table_name} query: {query_result}")
+                if query_result.get('success') and query_result.get('response'):
+                    fields = query_result.get('response')
+                    rows = self._reconstruct_rows(fields, 2)
+                    all_dependencies.extend(rows)
+                    break  # Found the right table
+            except Fault as e:
+                debug_info.append(f"{table_name} query fault: {str(e)}")
+
+        # Query calling search space members (try multiple table names)
+        css_tables = ['css', 'callingSearchSpace', 'callingsearchspace', 'csstable']
+        for css_table in css_tables:
+            try:
+                query = f"""
+                SELECT DISTINCT {css_table}.name as name, 'Calling Search Space' as type
+                FROM {css_table}
+                INNER JOIN cssmember ON {css_table}.pkid = cssmember.fkcss
+                WHERE cssmember.fkroutepartition = '{partition_pkid}'
+                ORDER BY name
+                """
+                query_result = self.execute_sql_query(query)
+                debug_info.append(f"{css_table}/cssmember query: {query_result}")
+                if query_result.get('success') and query_result.get('response'):
+                    fields = query_result.get('response')
+                    rows = self._reconstruct_rows(fields, 2)
+                    all_dependencies.extend(rows)
+                    break  # Found the right table
+            except Fault as e:
+                debug_info.append(f"{css_table}/cssmember query fault: {str(e)}")
+
+        # Query SIP route patterns
+        sip_route_tables = ['siproutepattern', 'sipRoutePattern', 'siproute']
+        for table_name in sip_route_tables:
+            try:
+                query = f"""
+                SELECT DISTINCT {table_name}.pattern as name, 'SIP Route Pattern' as type
+                FROM {table_name}
+                WHERE {table_name}.fkroutepartition = '{partition_pkid}'
+                ORDER BY name
+                """
+                query_result = self.execute_sql_query(query)
+                debug_info.append(f"{table_name} query: {query_result}")
+                if query_result.get('success') and query_result.get('response'):
+                    fields = query_result.get('response')
+                    rows = self._reconstruct_rows(fields, 2)
+                    all_dependencies.extend(rows)
+                    break  # Found the right table
+            except Fault as e:
+                debug_info.append(f"{table_name} query fault: {str(e)}")
+
+        # Query hunt pilots
+        huntpilot_tables = ['huntpilot', 'huntPilot', 'huntroutepilot']
+        for table_name in huntpilot_tables:
+            try:
+                query = f"""
+                SELECT DISTINCT {table_name}.name as name, 'Hunt Pilot' as type
+                FROM {table_name}
+                WHERE {table_name}.fkroutepartition = '{partition_pkid}'
+                ORDER BY name
+                """
+                query_result = self.execute_sql_query(query)
+                debug_info.append(f"{table_name} query: {query_result}")
+                if query_result.get('success') and query_result.get('response'):
+                    fields = query_result.get('response')
+                    rows = self._reconstruct_rows(fields, 2)
+                    all_dependencies.extend(rows)
+                    break  # Found the right table
+            except Fault as e:
+                debug_info.append(f"{table_name} query fault: {str(e)}")
+
+        # Query call pickup groups
+        cpg_tables = ['callpickupgroup', 'callPickupGroup', 'cpgroup']
+        for table_name in cpg_tables:
+            try:
+                query = f"""
+                SELECT DISTINCT {table_name}.pattern as name, 'Call Pickup Group' as type
+                FROM {table_name}
+                WHERE {table_name}.fkroutepartition = '{partition_pkid}'
+                ORDER BY name
+                """
+                query_result = self.execute_sql_query(query)
+                debug_info.append(f"{table_name} query: {query_result}")
+                if query_result.get('success') and query_result.get('response'):
+                    fields = query_result.get('response')
+                    rows = self._reconstruct_rows(fields, 2)
+                    all_dependencies.extend(rows)
+                    break  # Found the right table
+            except Fault as e:
+                debug_info.append(f"{table_name} query fault: {str(e)}")
+
+        # Query directed call park
+        dcp_tables = ['directedcallpark', 'directedCallPark', 'dcpgroup']
+        for table_name in dcp_tables:
+            try:
+                query = f"""
+                SELECT DISTINCT {table_name}.name as name, 'Directed Call Park' as type
+                FROM {table_name}
+                WHERE {table_name}.fkroutepartition = '{partition_pkid}'
+                ORDER BY name
+                """
+                query_result = self.execute_sql_query(query)
+                debug_info.append(f"{table_name} query: {query_result}")
+                if query_result.get('success') and query_result.get('response'):
+                    fields = query_result.get('response')
+                    rows = self._reconstruct_rows(fields, 2)
+                    all_dependencies.extend(rows)
+                    break  # Found the right table
+            except Fault as e:
+                debug_info.append(f"{table_name} query fault: {str(e)}")
+
+        if all_dependencies:
+            result['success'] = True
+            result['response'] = all_dependencies
+            result['debug'] = debug_info
+            return serialize_object(result)
+
+        result['success'] = True
+        result['response'] = []
+        result['debug'] = debug_info
+        result = serialize_object(result)
+        return result
+
+    def delete_partition(self, name):
+        """
+        Delete a Partition by name
+        :param name: Partition name
+        :return: result dictionary
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+        try:
+            self.service.removeRoutePartition(name=name)
+            result['success'] = True
+            result['response'] = f'Partition "{name}" deleted successfully'
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        except Exception as error:
+            result['response'] = 'ERROR'
+            result['error'] = str(error)
+        result = serialize_object(result)
+        return result
+
+    def get_table_info(self, table_name):
+        """
+        Get sample row from table to inspect column names (for debugging schema)
+        :param table_name: Table name to inspect
+        :return: result dictionary with sample row data showing column names
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+            'columns': [],
+        }
+        try:
+            query = f"SELECT * FROM {table_name} LIMIT 1"
+            query_result = self.execute_sql_query(query)
+            if query_result.get('success') and query_result.get('response'):
+                # Extract column names from the response
+                resp = query_result.get('response')
+                if resp and isinstance(resp, list) and len(resp) > 0:
+                    if isinstance(resp[0], dict):
+                        result['columns'] = list(resp[0].keys())
+                    result['response'] = str(resp[0])
+                result['success'] = True
+            else:
+                result['error'] = query_result.get('error', 'No data returned')
+        except Exception as e:
+            result['error'] = str(e)
+        result = serialize_object(result)
+        return result
+
+    def _get_device_type(self, product, deviceclass):
+        """
+        Determine device type from product and class fields
+        :param product: Device product field value
+        :param deviceclass: Device class field value
+        :return: Formatted device type string
+        """
+        product = (product or '').strip().lower()
+        deviceclass = (deviceclass or '').strip().lower()
+
+        # Check for Phone by product name
+        if 'ip phone' in product or 'phone' in product:
+            return 'Device - Phone'
+
+        # Check for Phone by device class
+        if 'phone' in deviceclass:
+            return 'Device - Phone'
+
+        # Check for Trunk/Gateway
+        if any(x in product for x in ['trunk', 'gateway', 'cube', 'ise']):
+            if 'gateway' in product:
+                return 'Device - Gateway'
+            elif 'trunk' in product:
+                return 'Device - Trunk'
+            else:
+                return 'Device - Trunk'
+
+        # Check for CTI Route Point
+        if 'cti' in product or 'cti route point' in product:
+            return 'Device - CTI Route Point'
+
+        # Check for Remote Destination Profile
+        if 'remote destination' in product or 'rdp' in product:
+            return 'Device - Remote Destination Profile'
+
+        # Check for Conference Bridge
+        if 'conference' in product or 'bridge' in product:
+            return 'Device - Conference Bridge'
+
+        # Check for MTP (Media Termination Point)
+        if 'mtp' in product or 'media termination' in product:
+            return 'Device - Media Termination Point'
+
+        # Check for IVR
+        if 'ivr' in product:
+            return 'Device - IVR'
+
+        # Use product as-is if it has a value
+        if product and product != 'device':
+            return f'Device - {product.title()}'
+
+        # Default
+        return 'Device'
+
+    def find_css_dependencies(self, css_name):
+        """
+        Find all references to a Calling Search Space using SQL query
+        :param css_name: CSS name
+        :return: result dictionary with list of objects using this CSS
+        """
+        result = {
+            'success': False,
+            'response': [],
+            'error': '',
+        }
+
+        all_dependencies = []
+        debug_info = []
+
+        # First, get the PKID of the CSS to use in FK lookups
+        css_pkid = None
+        try:
+            query = f"SELECT pkid FROM callingSearchSpace WHERE name = '{css_name}'"
+            query_result = self.execute_sql_query(query)
+            success = query_result.get('success')
+            error = query_result.get('error', '')
+            resp = query_result.get('response')
+            debug_info.append(f"CSS PKID lookup: success={success}, resp_count={len(resp) if resp else 0}, error={error[:50] if error else ''}")
+            if success and resp:
+                if isinstance(resp[0], dict):
+                    css_pkid = resp[0].get('pkid')
+                    debug_info.append(f"  -> Found CSS PKID: {css_pkid}")
+        except Fault as e:
+            debug_info.append(f"CSS PKID lookup fault: {str(e)}")
+
+        if not css_pkid:
+            result['success'] = True
+            result['response'] = []
+            result['debug'] = debug_info
+            result = serialize_object(result)
+            return result
+
+        # CSS foreign key columns found in device table
+        device_css_fk_columns = [
+            'fkcallingsearchspace',
+            'fkcallingsearchspace_callednational',
+            'fkcallingsearchspace_cgpningressdn',
+            'fkcallingsearchspace_rdntransform',
+            'fkcallingsearchspace_restrict',
+            'fkcallingsearchspace_cdpntransform',
+            'fkcallingsearchspace_cgpnintl',
+            'fkcallingsearchspace_cgpnnational',
+            'fkcallingsearchspace_calledunknown',
+            'fkcallingsearchspace_cgpnsubscriber',
+            'fkcallingsearchspace_cgpnunknown',
+            'fkcallingsearchspace_cgpntransform',
+            'fkcallingsearchspace_calledsubscriber',
+            'fkcallingsearchspace_refer',
+            'fkcallingsearchspace_reroute',
+            'fkcallingsearchspace_aar',
+            'fkcallingsearchspace_calledintl',
+        ]
+
+        # Query devices with this CSS via FK (try to include product for better descriptions)
+        for fk_col in device_css_fk_columns:
+            try:
+                # Try to fetch with product field for better descriptions
+                query = f"""
+                SELECT DISTINCT device.name as name, COALESCE(device.product, '') as product, COALESCE(device.class, '') as deviceclass
+                FROM device
+                WHERE device.{fk_col} = '{css_pkid}'
+                ORDER BY name
+                """
+                query_result = self.execute_sql_query(query)
+                success = query_result.get('success')
+                error = query_result.get('error', '')
+                resp = query_result.get('response', [])
+                debug_info.append(f"device {fk_col}: success={success}, resp_count={len(resp) if resp else 0}, error={error[:50] if error else ''}")
+
+                # If product query failed, try simple name query
+                if not success or not resp:
+                    query = f"""
+                    SELECT DISTINCT device.name as name, 'Device' as product, '' as deviceclass
+                    FROM device
+                    WHERE device.{fk_col} = '{css_pkid}'
+                    ORDER BY name
+                    """
+                    query_result = self.execute_sql_query(query)
+                    success = query_result.get('success')
+                    resp = query_result.get('response', [])
+
+                if success and resp:
+                    fields = resp
+                    rows = self._reconstruct_rows(fields, 3)
+                    if rows:
+                        for row in rows:
+                            product = row.get('product', '').strip() if isinstance(row.get('product'), str) else ''
+                            deviceclass = row.get('deviceclass', '').strip() if isinstance(row.get('deviceclass'), str) else ''
+
+                            # Determine device type
+                            device_type = self._get_device_type(product, deviceclass)
+                            row['type'] = device_type
+                        all_dependencies.extend(rows)
+                        debug_info.append(f"  -> Found {len(rows)} devices")
+            except Fault as e:
+                debug_info.append(f"device {fk_col}: fault={str(e)[:50]}")
+
+
+        # CSS foreign key columns found in numplan table
+        numplan_css_fk_columns = [
+            'fkcallingsearchspace_cfhrint',
+            'fkcallingsearchspace_mwi',
+            'fkcallingsearchspace_cfnaint',
+            'fkcallingsearchspace_translation',
+            'fkcallingsearchspace_revert',
+            'fkcallingsearchspace_cfurint',
+            'fkcallingsearchspace_pkmonfwdnoretint',
+            'fkcallingsearchspace_cfhr',
+            'fkcallingsearchspace_cfbint',
+            'fkcallingsearchspace_cfapt',
+            'fkcallingsearchspace_sharedlineappear',
+            'fkcallingsearchspace_pkmonfwdnoret',
+            'fkcallingsearchspace_cfb',
+            'fkcallingsearchspace_pff',
+            'fkcallingsearchspace_cfna',
+            'fkcallingsearchspace_devicefailure',
+            'fkcallingsearchspace_pffint',
+            'fkcallingsearchspace_reroute',
+            'fkcallingsearchspace_cfur',
+        ]
+
+        # CSS column name variants for gateway/trunk/common device config tables
+        css_col_variants = [
+            'callingSearchSpaceName',
+            'callingSearchSpace',
+            'cssName',
+            'callingSearchSpaceId',
+            'css_name',
+        ]
+
+        # Query DNs (numplan) with this CSS via FK
+        for fk_col in numplan_css_fk_columns:
+            try:
+                query = f"""
+                SELECT DISTINCT numplan.dnorpattern as name, 'DN' as type
+                FROM numplan
+                WHERE numplan.{fk_col} = '{css_pkid}'
+                ORDER BY name
+                """
+                query_result = self.execute_sql_query(query)
+                success = query_result.get('success')
+                error = query_result.get('error', '')
+                resp = query_result.get('response', [])
+                if resp:  # Only log if there's a response
+                    debug_info.append(f"numplan {fk_col}: success={success}, resp_count={len(resp)}")
+                if success and resp:
+                    fields = resp
+                    rows = self._reconstruct_rows(fields, 2)
+                    if rows:
+                        all_dependencies.extend(rows)
+                        debug_info.append(f"  -> Found {len(rows)} DNs")
+            except Fault as e:
+                debug_info.append(f"numplan {fk_col}: fault={str(e)[:50]}")
+
+        # Query Device Pools with this CSS (via FK)
+        devicepool_css_fk_columns = [
+            'fkcallingsearchspace',
+            'fkcallingsearchspace_mobility',
+        ]
+        for fk_col in devicepool_css_fk_columns:
+            try:
+                query = f"""
+                SELECT DISTINCT devicepool.name as name, 'Device Pool' as type
+                FROM devicepool
+                WHERE devicepool.{fk_col} = '{css_pkid}'
+                ORDER BY name
+                """
+                query_result = self.execute_sql_query(query)
+                success = query_result.get('success')
+                error = query_result.get('error', '')
+                resp = query_result.get('response', [])
+                if resp:
+                    debug_info.append(f"devicepool {fk_col}: success={success}, resp_count={len(resp)}")
+                if success and resp:
+                    fields = resp
+                    rows = self._reconstruct_rows(fields, 2)
+                    if rows:
+                        all_dependencies.extend(rows)
+                        debug_info.append(f"  -> Found {len(rows)} device pools with {fk_col}")
+            except Fault as e:
+                debug_info.append(f"devicepool {fk_col}: fault={str(e)[:50]}")
+
+        # Query gateway endpoints (trunks) with this CSS
+        gateway_tables = ['gatewayendpoint', 'trunk', 'gateway', 'gatewaytrunk', 'endpoint']
+        for table_name in gateway_tables:
+            for col_name in css_col_variants:
+                try:
+                    query = f"""
+                    SELECT DISTINCT {table_name}.name as name, 'Trunk' as type
+                    FROM {table_name}
+                    WHERE {table_name}.{col_name} = '{css_name}'
+                    ORDER BY name
+                    """
+                    query_result = self.execute_sql_query(query)
+                    success = query_result.get('success')
+                    error = query_result.get('error', '')
+                    resp = query_result.get('response', [])
+                    if success and resp:
+                        fields = resp
+                        rows = self._reconstruct_rows(fields, 2)
+                        if rows:
+                            all_dependencies.extend(rows)
+                            debug_info.append(f"Found {len(rows)} trunks in {table_name} with {col_name}")
+                            break
+                except Fault as e:
+                    pass
+
+        # Query common device config
+        for col_name in css_col_variants:
+            try:
+                query = f"""
+                SELECT DISTINCT commondeviceconfig.name as name, 'Common Device Config' as type
+                FROM commondeviceconfig
+                WHERE commondeviceconfig.{col_name} = '{css_name}'
+                ORDER BY name
+                """
+                query_result = self.execute_sql_query(query)
+                success = query_result.get('success')
+                error = query_result.get('error', '')
+                resp = query_result.get('response', [])
+                debug_info.append(f"commondeviceconfig query (col={col_name}): success={success}, error={error}")
+                if success and resp:
+                    fields = resp
+                    rows = self._reconstruct_rows(fields, 2)
+                    if rows:
+                        all_dependencies.extend(rows)
+                        debug_info.append(f"  Found {len(rows)} common device configs with {col_name}")
+                        break
+            except Fault as e:
+                debug_info.append(f"commondeviceconfig query fault (col={col_name}): {str(e)}")
+
+        # Query IVR portals
+        try:
+            query = f"""
+            SELECT DISTINCT ivrportal.name as name, 'IVR Portal' as type
+            FROM ivrportal
+            WHERE ivrportal.callingSearchSpaceName = '{css_name}'
+            ORDER BY name
+            """
+            query_result = self.execute_sql_query(query)
+            debug_info.append(f"ivrportal query: success={query_result.get('success')}, resp_len={len(query_result.get('response', []))}")
+            if query_result.get('success') and query_result.get('response'):
+                fields = query_result.get('response')
+                rows = self._reconstruct_rows(fields, 2)
+                if rows:
+                    all_dependencies.extend(rows)
+        except Fault as e:
+            debug_info.append(f"ivrportal query fault: {str(e)}")
+
+        # Query route patterns
+        route_pattern_tables = ['routepattern', 'dialrule', 'callroute']
+        for table_name in route_pattern_tables:
+            try:
+                query = f"""
+                SELECT DISTINCT {table_name}.pattern as name, 'Route Pattern' as type
+                FROM {table_name}
+                WHERE {table_name}.callingSearchSpaceName = '{css_name}'
+                ORDER BY name
+                """
+                query_result = self.execute_sql_query(query)
+                debug_info.append(f"{table_name} query: success={query_result.get('success')}, resp_len={len(query_result.get('response', []))}")
+                if query_result.get('success') and query_result.get('response'):
+                    fields = query_result.get('response')
+                    rows = self._reconstruct_rows(fields, 2)
+                    if rows:
+                        all_dependencies.extend(rows)
+                        break
+            except Fault as e:
+                debug_info.append(f"{table_name} query fault: {str(e)}")
+
+        # Query translation patterns
+        tranpattern_tables = ['tranpattern', 'translationpattern', 'translatepattern']
+        for table_name in tranpattern_tables:
+            try:
+                query = f"""
+                SELECT DISTINCT {table_name}.pattern as name, 'Translation Pattern' as type
+                FROM {table_name}
+                WHERE {table_name}.callingSearchSpaceName = '{css_name}'
+                ORDER BY name
+                """
+                query_result = self.execute_sql_query(query)
+                debug_info.append(f"{table_name} query: success={query_result.get('success')}, resp_len={len(query_result.get('response', []))}")
+                if query_result.get('success') and query_result.get('response'):
+                    fields = query_result.get('response')
+                    rows = self._reconstruct_rows(fields, 2)
+                    if rows:
+                        all_dependencies.extend(rows)
+                        break
+            except Fault as e:
+                debug_info.append(f"{table_name} query fault: {str(e)}")
+
+        # Query hunt pilots
+        huntpilot_tables = ['huntpilot', 'huntPilot', 'huntroutepilot']
+        for table_name in huntpilot_tables:
+            try:
+                query = f"""
+                SELECT DISTINCT {table_name}.pattern as name, 'Hunt Pilot' as type
+                FROM {table_name}
+                WHERE {table_name}.callingSearchSpaceName = '{css_name}'
+                ORDER BY name
+                """
+                query_result = self.execute_sql_query(query)
+                debug_info.append(f"{table_name} query: success={query_result.get('success')}, resp_len={len(query_result.get('response', []))}")
+                if query_result.get('success') and query_result.get('response'):
+                    fields = query_result.get('response')
+                    rows = self._reconstruct_rows(fields, 2)
+                    if rows:
+                        all_dependencies.extend(rows)
+                        break
+            except Fault as e:
+                debug_info.append(f"{table_name} query fault: {str(e)}")
+
+        # Query call pickup groups
+        cpg_tables = ['callpickupgroup', 'callPickupGroup', 'cpgroup']
+        for table_name in cpg_tables:
+            try:
+                query = f"""
+                SELECT DISTINCT {table_name}.pattern as name, 'Call Pickup Group' as type
+                FROM {table_name}
+                WHERE {table_name}.callingSearchSpaceName = '{css_name}'
+                ORDER BY name
+                """
+                query_result = self.execute_sql_query(query)
+                debug_info.append(f"{table_name} query: success={query_result.get('success')}, resp_len={len(query_result.get('response', []))}")
+                if query_result.get('success') and query_result.get('response'):
+                    fields = query_result.get('response')
+                    rows = self._reconstruct_rows(fields, 2)
+                    if rows:
+                        all_dependencies.extend(rows)
+                        break
+            except Fault as e:
+                debug_info.append(f"{table_name} query fault: {str(e)}")
+
+        # Query voice mail profiles
+        try:
+            query = f"""
+            SELECT DISTINCT voicemailprofile.name as name, 'Voice Mail Profile' as type
+            FROM voicemailprofile
+            WHERE voicemailprofile.callingSearchSpaceName = '{css_name}'
+            ORDER BY name
+            """
+            query_result = self.execute_sql_query(query)
+            debug_info.append(f"voicemailprofile query: success={query_result.get('success')}, resp_len={len(query_result.get('response', []))}")
+            if query_result.get('success') and query_result.get('response'):
+                fields = query_result.get('response')
+                rows = self._reconstruct_rows(fields, 2)
+                if rows:
+                    all_dependencies.extend(rows)
+        except Fault as e:
+            debug_info.append(f"voicemailprofile query fault: {str(e)}")
+
+        # Query conference bridges
+        try:
+            query = f"""
+            SELECT DISTINCT conferencebridge.name as name, 'Conference Bridge' as type
+            FROM conferencebridge
+            WHERE conferencebridge.callingSearchSpaceName = '{css_name}'
+            ORDER BY name
+            """
+            query_result = self.execute_sql_query(query)
+            debug_info.append(f"conferencebridge query: success={query_result.get('success')}, resp_len={len(query_result.get('response', []))}")
+            if query_result.get('success') and query_result.get('response'):
+                fields = query_result.get('response')
+                rows = self._reconstruct_rows(fields, 2)
+                if rows:
+                    all_dependencies.extend(rows)
+        except Fault as e:
+            debug_info.append(f"conferencebridge query fault: {str(e)}")
+
+        # Query MTP (Media Termination Points)
+        try:
+            query = f"""
+            SELECT DISTINCT mtp.name as name, 'Media Termination Point' as type
+            FROM mtp
+            WHERE mtp.callingSearchSpaceName = '{css_name}'
+            ORDER BY name
+            """
+            query_result = self.execute_sql_query(query)
+            debug_info.append(f"mtp query: success={query_result.get('success')}, resp_len={len(query_result.get('response', []))}")
+            if query_result.get('success') and query_result.get('response'):
+                fields = query_result.get('response')
+                rows = self._reconstruct_rows(fields, 2)
+                if rows:
+                    all_dependencies.extend(rows)
+        except Fault as e:
+            debug_info.append(f"mtp query fault: {str(e)}")
+
+        if all_dependencies:
+            result['success'] = True
+            result['response'] = all_dependencies
+            result['debug'] = debug_info
+            return serialize_object(result)
+
+        result['success'] = True
+        result['response'] = []
+        result['debug'] = debug_info
+        result = serialize_object(result)
+        return result
             

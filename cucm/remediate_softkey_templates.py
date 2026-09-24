@@ -4,9 +4,9 @@ import warnings
 warnings.simplefilter('ignore')
 
 """
-List Softkey Templates and their dependencies
-Lists custom softkey templates (excludes system templates like "Public Conference User")
-and displays what devices/profiles use each template
+Remediate Softkey Templates - List and Delete Without Dependencies
+Lists custom softkey templates and their dependencies, then optionally deletes templates with no dependencies
+Excludes system templates like "Public Conference User"
 
 Supports single or multiple CUCM clusters
 
@@ -144,11 +144,11 @@ def run_operation_on_cluster(script_dir, cluster_data, cluster_credentials, logg
 
         logger.info('Completed cluster: %s', cluster_name)
         print(f"✓ Completed {cluster_name} ({server})")
-        return (True, no_dep_templates, cluster_name)
+        return (True, no_dep_templates, cluster_name, axl)
     except Exception as e:
         logger.error('Failed to process cluster %s: %s', cluster_name, str(e))
         print(f"✗ Failed on {cluster_name}: {str(e)}")
-        return (False, [], cluster_name)
+        return (False, [], cluster_name, None)
 
 
 def run_on_all_clusters(script_dir, clusters_data, logger):
@@ -165,15 +165,17 @@ def run_on_all_clusters(script_dir, clusters_data, logger):
     successful = 0
     failed = 0
     all_no_dep_templates = []
+    cluster_axl_map = {}
 
     for cluster in clusters_data:
         result = run_operation_on_cluster(script_dir, cluster, cluster_credentials, logger)
-        success, no_dep_templates, cluster_name = result
+        success, no_dep_templates, cluster_name, axl = result
         if success:
             successful += 1
             for template in no_dep_templates:
                 template['cluster'] = cluster_name
             all_no_dep_templates.extend(no_dep_templates)
+            cluster_axl_map[cluster_name] = axl
         else:
             failed += 1
 
@@ -181,29 +183,81 @@ def run_on_all_clusters(script_dir, clusters_data, logger):
     print(f"Completed: {successful} successful, {failed} failed")
     print(f"{'=' * 60}")
 
-    return all_no_dep_templates
+    return all_no_dep_templates, cluster_axl_map
 
 
-def export_to_csv(templates, script_dir, logger):
-    """Export templates with no dependencies to CSV file"""
-    import csv
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    csv_file = script_dir.parent / '_DATA' / f'{timestamp}-softkey-templates-no-dependencies.csv'
+def delete_templates(templates, cluster_axl_map, logger):
+    """Delete templates organized by cluster"""
+    if not templates:
+        print("No templates to delete")
+        return 0, 0
 
-    try:
-        with open(csv_file, 'w', newline='') as f:
-            writer = csv.DictWriter(f, fieldnames=['cluster', 'name', 'uuid'])
-            writer.writeheader()
-            writer.writerows(templates)
-        print(f"\n✓ Exported {len(templates)} templates to {csv_file}")
-        logger.info('Exported %d templates to %s', len(templates), csv_file)
-    except Exception as e:
-        print(f"\n✗ Failed to export CSV: {str(e)}")
-        logger.error('Failed to export CSV: %s', str(e))
+    print(f"\n{'='*80}")
+    print(f"Templates to Delete ({len(templates)} templates)")
+    print(f"{'='*80}\n")
+
+    clusters_set = set()
+    for template in templates:
+        print(f"  - {template.get('name')} (Cluster: {template.get('cluster')})")
+        clusters_set.add(template.get('cluster'))
+
+    print(f"\nTotal: {len(templates)} templates across {len(clusters_set)} cluster(s)")
+    print(f"{'='*80}\n")
+
+    if not prompt_yes_no('Delete these templates?', default=False):
+        print("Deletion cancelled by user")
+        logger.info("Deletion cancelled by user")
+        return 0, 0
+
+    # Organize by cluster
+    clusters_data = {}
+    for template in templates:
+        cluster_name = template.get('cluster')
+        if cluster_name not in clusters_data:
+            clusters_data[cluster_name] = []
+        clusters_data[cluster_name].append(template)
+
+    successful_deletes = 0
+    failed_deletes = 0
+
+    # Delete templates by cluster
+    print("\nDeleting templates...\n")
+    for cluster_name, cluster_templates in clusters_data.items():
+        if cluster_name not in cluster_axl_map:
+            logger.warning('No AXL client for cluster %s', cluster_name)
+            failed_deletes += len(cluster_templates)
+            continue
+
+        axl = cluster_axl_map[cluster_name]
+        print(f"{'-'*80}")
+        print(f"Cluster: {cluster_name}")
+        print(f"{'-'*80}\n")
+
+        for template in cluster_templates:
+            template_name = template.get('name')
+            try:
+                result = axl.delete_softkey_template(template_name)
+                if result.get('success'):
+                    print(f"  ✓ Deleted: {template_name}")
+                    logger.info('Deleted template: %s', template_name)
+                    successful_deletes += 1
+                else:
+                    error_msg = result.get('error', 'Unknown error')
+                    print(f"  ✗ Failed: {template_name} - {error_msg}")
+                    logger.error('Failed to delete template %s: %s', template_name, error_msg)
+                    failed_deletes += 1
+            except Exception as e:
+                print(f"  ✗ Exception: {template_name} - {str(e)}")
+                logger.error('Exception deleting template %s: %s', template_name, str(e))
+                failed_deletes += 1
+
+        print()
+
+    return successful_deletes, failed_deletes
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='List Softkey Templates and their dependencies')
+    parser = argparse.ArgumentParser(description='Remediate Softkey Templates - List and Delete Without Dependencies')
     parser.add_argument('--debug', action='store_true', help='Enable debug-level console logging')
     args = parser.parse_args()
 
@@ -213,12 +267,13 @@ if __name__ == '__main__':
 
     # Setup Logging
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    log_file = f"_logs/{timestamp}-list-softkey-templates.log"
+    log_file = f"_logs/{timestamp}-remediate-softkey-templates.log"
     logger = setup_logger(log_file, debug=args.debug)
-    logger.info("List Softkey Templates - Started")
+    logger.info("Remediate Softkey Templates - Started")
 
     use_multiple = False
     all_no_dep_templates = []
+    cluster_axl_map = {}
 
     clusters_data = get_objects_for_multi_operation(basepath, 'CUCM', server_type='publisher')
     if clusters_data:
@@ -229,7 +284,7 @@ if __name__ == '__main__':
                 print("No clusters found in clusters.csv")
                 exit(1)
 
-            all_no_dep_templates = run_on_all_clusters(script_dir, clusters_data, logger)
+            all_no_dep_templates, cluster_axl_map = run_on_all_clusters(script_dir, clusters_data, logger)
         else:
             # Single cluster mode - user said 'n' to multiple clusters
             cluster = get_object_for_single_operation(basepath, 'CUCM', server_type='publisher')
@@ -250,6 +305,7 @@ if __name__ == '__main__':
             for template in no_dep_templates:
                 template['cluster'] = cluster['name']
             all_no_dep_templates = no_dep_templates
+            cluster_axl_map[cluster['name']] = axl
 
     else:
         # No clusters found in CSV - single cluster mode with manual input
@@ -271,11 +327,23 @@ if __name__ == '__main__':
         for template in no_dep_templates:
             template['cluster'] = cluster['name']
         all_no_dep_templates = no_dep_templates
+        cluster_axl_map[cluster['name']] = axl
 
-    # Offer to export templates with no dependencies to CSV
+    # Offer to delete templates with no dependencies
     if all_no_dep_templates:
-        export = prompt_yes_no(f'\nExport {len(all_no_dep_templates)} templates with no dependencies to CSV?', default=False)
-        if export:
-            export_to_csv(all_no_dep_templates, script_dir, logger)
+        successful, failed = delete_templates(all_no_dep_templates, cluster_axl_map, logger)
 
-    logger.info("List Softkey Templates - Completed")
+        # Summary
+        print(f"\n{'='*80}")
+        print(f"Deletion Summary")
+        print(f"{'='*80}")
+        print(f"Successful: {successful}")
+        print(f"Failed: {failed}")
+        print(f"Total: {successful + failed}")
+        print(f"{'='*80}\n")
+
+        logger.info("Deletion Summary - Successful: %d, Failed: %d, Total: %d", successful, failed, successful + failed)
+    else:
+        print("\nNo templates without dependencies to delete")
+
+    logger.info("Remediate Softkey Templates - Completed")
