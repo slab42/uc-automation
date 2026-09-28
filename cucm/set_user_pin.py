@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# TITLE: Set User PIN
 
 import warnings
 warnings.simplefilter('ignore')

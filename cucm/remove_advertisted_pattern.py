@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# TITLE: Remove Advertised Pattern
 
 """
 Remove Advertised Pattern individually or from a list in CSV

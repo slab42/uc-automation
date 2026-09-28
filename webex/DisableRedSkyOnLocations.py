@@ -1,3 +1,4 @@
+# TITLE: Disable RedSky on Locations
 
 import requests
 import json

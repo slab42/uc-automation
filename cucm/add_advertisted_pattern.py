@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# TITLE: Add Advertised Pattern
 
 """
 Add Advertised Pattern individually or from a list in CSV

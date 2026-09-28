@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# TITLE: List Softkey Templates
 
 import warnings
 warnings.simplefilter('ignore')

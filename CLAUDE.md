@@ -12,6 +12,7 @@ uc-automation is a collection of Python scripts for Unified Communications autom
 - All CSV input files should be created in the _DATA folder.  Also examples of these files should be included in the _DATA/examples folder.
 - Script comments should always be at the very top of the script
 - Customer variable files (.var files) are not checked in; each customer maintains their own .var file matching the .var.EXAMPLE
+- Every script must carry a `# TITLE: <short name>` line (max 40 chars, Title Case) within its first 5 lines - directly after the shebang, or as line 1 when there is no shebang. `main.py` uses it as the menu label, and a script without one will not appear in the launcher at all.
 
 ## Directory Structure
 
@@ -149,6 +150,10 @@ timeout_seconds = 30
 api_endpoint = https://example.com/api
 ```
 
+## Running Scripts
+
+`python3 main.py` is the single entry point for every script in this repo. It presents an interactive menu grouped by category (CUCM, CUC, CUBE, Webex) and runs the chosen script as a subprocess. Use `python3 main.py --list` to see the full inventory (path, title, flags) without launching the menu. See `.doc/main-py-launcher.md` for the launcher's design.
+
 ## Running CUCM/CUC/CUBE Scripts
 
 All scripts follow the same pattern:
@@ -258,6 +263,7 @@ Examples:
 5. Prompt for single vs. CSV mode
 6. Process data, call API, log results
 7. Document operation CSV format in docstring
+8. Add a `# TITLE: <short name>` line in the first 5 lines so the script appears in the `main.py` launcher menu. See `.doc/main-py-launcher.md` for launcher design; update that doc in the same commit as any launcher change.
 
 **Adding customer variables to a script:**
 1. Create `.var.EXAMPLE` file in `.var/examples/` (INI format with `[variables]` section)

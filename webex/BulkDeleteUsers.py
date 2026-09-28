@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# TITLE: Bulk Delete Users
 """ Python Script to Delete Users from an Org in Control Hub
     
 This script is designed to delete users from a Control Hub organization based on an INPUT CSV file with user emails.

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# TITLE: Lookup Device Type
 
 """
 Look up CUCM device type
