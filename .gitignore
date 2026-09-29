@@ -166,3 +166,8 @@ logs/
 #   cd gui/frontend && npm install && npm run build
 gui/frontend/node_modules/
 gui/frontend/dist/
+# The *.json credentials rule above must not hide the frontend build manifests.
+!gui/frontend/package.json
+!gui/frontend/package-lock.json
+!gui/frontend/tsconfig.json
+!gui/frontend/tsconfig.node.json
