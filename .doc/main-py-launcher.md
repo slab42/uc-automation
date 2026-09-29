@@ -12,7 +12,8 @@ look over-engineered until you know the reason (Section 3).
 
 - Entry point: `python3 main.py` (interactive menu), `python3 main.py --list`
   (plain-text inventory, safe to pipe), `--list --verbose` (also shows
-  skipped files and duplicate-title warnings), `--no-clear` / `UC_LAUNCHER_NO_CLEAR=1`.
+  skipped files and duplicate-title warnings), `--no-clear` / `UC_LAUNCHER_NO_CLEAR=1`,
+  `--gui [--host H] [--port N]` (web front end, see `.doc/gui-web-frontend.md`).
 - **Discovery is never cached.** `setup/script_registry.discover()` re-walks
   the four category directories every time the launcher starts, and again
   whenever the user presses `r`. Consequences:
@@ -29,7 +30,8 @@ look over-engineered until you know the reason (Section 3).
 
 | Module | Owns |
 |---|---|
-| `main.py` | CLI parsing (`--list`, `--verbose`, `--no-clear`), puts repo root on `sys.path`, delegates to `discover()` for `--list` or `menu.run()` for the interactive menu. |
+| `main.py` | CLI parsing (`--list`, `--verbose`, `--no-clear`, `--gui`), puts repo root on `sys.path`, delegates to `discover()` for `--list`, `menu.run()` for the interactive menu, or `gui.backend.app.serve()` for `--gui`. |
+| `gui/backend/`, `gui/frontend/` | Web GUI over the same registry. Documented separately in `.doc/gui-web-frontend.md`. |
 | `setup/script_registry.py` | Discovery only, never runs anything. Walks `CATEGORIES` dirs, applies `_SKIP_DIR_PARTS` and `_DENYLIST`, reads `# TITLE:` (line scan) and description (AST), detects `takes_args`. Returns `(entries, skipped)`. |
 | `setup/launcher_config.py` | Persistence of per-user state (`favorites`, `hidden`, `show_hidden`, `clear_screen`) to `.var/launcher.json`. Atomic save (`.tmp` + `os.replace`), quarantines corrupt JSON to `.bak`, `read_only` mode if the file's `version` is newer than this build understands. |
 | `setup/menu.py` | All interactive screens (main / category / favorites), pagination, item commands (`i`/`f`/`x`/`a`), and the subprocess launch of the chosen script. |
@@ -69,7 +71,7 @@ This must never be changed. Six verified reasons:
 | `exec()` on script source | Same as above, plus loses the script's own `__file__`/`sys.argv[0]`. |
 | `capture_output=` / `stdout=` / `stderr=` | Stdio must stay inherited: 42 of the 48 scripts call `input()` and 1 calls `getpass()` directly (the rest prompt through `setup/multi_object_loader.py`) — capturing stdio breaks every prompt. |
 | `shell=True` | No shell interpretation needed, and 5 script filenames contain hyphens (e.g. `remedy-RP-oneoff.py`, `compare_advP-RP.py`) that a shell command line would need careful quoting for. |
-| `start_new_session=True` | Would detach the child into its own process group, orphaning it from the launcher's Ctrl-C — a hung script would become unkillable instead of exiting with code 130. |
+| `start_new_session=True` | Would detach the child into its own process group, orphaning it from the launcher's Ctrl-C — a hung script would become unkillable instead of exiting with code 130. (The web GUI's PTY runner does the opposite on purpose; see `.doc/gui-web-frontend.md` §3.) |
 | `Path.cwd()` (in the launcher, for the child's cwd) | Resolves to the *launcher's* directory, not the script's — use `entry.path.parent` instead (reason 2). |
 
 ## 4. Verified codebase facts (re-verified 2026-09-28)
@@ -199,3 +201,8 @@ selection only through `setup/multi_object_loader.py`); `cuc/cucAPI.py` added
 and denylisted; 13 CUCM scripts reordered so the docstring precedes
 `import warnings`; `cucm/lookup_device_type.py` logger call fixed. No launcher
 code changed other than the denylist entry. Section 4 counts re-verified.
+
+**2026-09-28 (GUI-add-on)** — `--gui` flag added to `main.py`; it hands off
+to `gui/backend/app.serve()`. Discovery, config and menu code untouched;
+the GUI reuses `discover()`/`read_description()` directly. See
+`.doc/gui-web-frontend.md`.

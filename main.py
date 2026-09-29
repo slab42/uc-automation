@@ -16,6 +16,14 @@ Usage:
                                      Also print skipped files (with the
                                      reason) and duplicate-title warnings.
     python3 main.py --no-clear      Never clear the screen between menus.
+    python3 main.py --gui           Serve the web GUI (FastAPI + React) at
+                                     http://127.0.0.1:8420/ instead of the
+                                     terminal menu. Same script inventory,
+                                     scripts run in a browser terminal.
+    python3 main.py --gui --host H --port N
+                                     Bind address/port for --gui. Keep the
+                                     default 127.0.0.1 unless an
+                                     authenticating proxy sits in front.
 
 Environment:
     UC_LAUNCHER_NO_CLEAR=1          Same effect as --no-clear.
@@ -72,8 +80,35 @@ def _print_list(root: Path, verbose: bool) -> int:
     return 0
 
 
+def _flag_value(argv: list, flag: str, default: str) -> str:
+    if flag in argv:
+        i = argv.index(flag)
+        if i + 1 < len(argv):
+            return argv[i + 1]
+    return default
+
+
+def _serve_gui(argv: list) -> int:
+    host = _flag_value(argv, '--host', '127.0.0.1')
+    try:
+        port = int(_flag_value(argv, '--port', '8420'))
+    except ValueError:
+        print("--port must be a number")
+        return 2
+    try:
+        from gui.backend.app import serve
+    except ImportError as e:
+        print(f"The web GUI needs fastapi and uvicorn ({e}).\n"
+              "Install with: pip install -r requirements.txt")
+        return 1
+    return serve(host=host, port=port)
+
+
 def main() -> int:
     argv = sys.argv[1:]
+    if '--gui' in argv:
+        return _serve_gui(argv)
+
     do_list = '--list' in argv
     verbose = '--verbose' in argv
     no_clear_flag = '--no-clear' in argv

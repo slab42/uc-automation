@@ -42,6 +42,10 @@ uc-automation is a collection of Python scripts for Unified Communications autom
   - Same router/credential flow: select from `_DATA/routers.csv`, single or multi router, credentials from `[CUBE:<hostname>]` / `[CUBE:default]`
   - HTML reports are written to `_DATA/reports/`
 
+- **gui/** - Web front end (`python3 main.py --gui`)
+  - `backend/` - FastAPI app, PTY script runner, credentials.env editor
+  - `frontend/` - React (Vite + TypeScript) app; `dist/` is the build output and is not checked in
+
 - **setup/** - Shared utilities and loaders
   - `multi_object_loader.py` - loads clusters/routers from CSV and manages credential prompting
   - `env_loader.py` - loads configuration and credentials from .env files
@@ -164,6 +168,8 @@ api_endpoint = https://example.com/api
 ## Running Scripts
 
 `python3 main.py` is the single entry point for every script in this repo. It presents an interactive menu grouped by category (CUCM, CUC, CUBE, Webex) and runs the chosen script as a subprocess. Use `python3 main.py --list` to see the full inventory (path, title, flags) without launching the menu. See `.doc/main-py-launcher.md` for the launcher's design.
+
+`python3 main.py --gui` serves the same inventory as a web app ("slab42 UC-Automations") at http://127.0.0.1:8420/: FastAPI backend in `gui/backend/`, React frontend in `gui/frontend/` (build once with `cd gui/frontend && npm install && npm run build`). Scripts run unchanged: a `sitecustomize` shim in `gui/backend/shim/` turns every `input()`/`getpass()` prompt into a web form field (no terminal in the browser), argparse flags become an options form, and the Settings page edits `.env/credentials.env` without ever displaying a password. Keep new scripts to the existing prompt conventions (`prompt_yes_no`, numbered `Select ... [1-N]:` lists, `[default]` suffixes) so the GUI can classify them. Design notes: `.doc/gui-web-frontend.md`. Update that doc in the same commit as any GUI change.
 
 ## Running CUCM/CUC/CUBE Scripts
 

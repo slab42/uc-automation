@@ -162,3 +162,7 @@ logs/
 # Launcher per-user state (favorites, hidden scripts)
 .var/launcher.json
 .var/launcher.json.bak
+# Web GUI (gui/frontend): build output and node modules. Rebuild with
+#   cd gui/frontend && npm install && npm run build
+gui/frontend/node_modules/
+gui/frontend/dist/
