@@ -202,3 +202,5 @@ if __name__ == '__main__':
         axl = AXL(username=username, password=password, wsdl=wsdl, cucm=server, cucm_version=version)
 
         run_export(axl, logger, server)
+
+    logger.info("Export Advertised Patterns - Completed")

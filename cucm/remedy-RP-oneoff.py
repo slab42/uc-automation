@@ -96,7 +96,7 @@ def find_dot_pattern_mismatches(route_patterns):
     return sorted(mismatches, key=lambda x: (x['exists'] == 'Yes', x['dottedPattern']))
 
 
-def export_mismatches_to_csv_impl(mismatches, total_route_count, filtered_route_count, description_filter, output_filename):
+def export_mismatches_to_csv_impl(logger, mismatches, total_route_count, filtered_route_count, description_filter, output_filename):
 
     missing_count = len([m for m in mismatches if m['exists'] == 'No'])
     has_count = len([m for m in mismatches if m['exists'] == 'Yes'])
@@ -171,7 +171,7 @@ def run_analysis(axl, logger, server, description_filter=''):
             output_filename = f'remedy_RP_dotted-{server}-{timestamp}.csv'
         else:
             output_filename = f'remedy_RP_dotted-{timestamp}.csv'
-        export_mismatches_to_csv_impl(mismatches, len(route_patterns), len(filtered_patterns), description_filter, output_filename)
+        export_mismatches_to_csv_impl(logger, mismatches, len(route_patterns), len(filtered_patterns), description_filter, output_filename)
     else:
         logger.warning('No route patterns to analyze')
         print('No route patterns to analyze')
@@ -288,3 +288,5 @@ if __name__ == '__main__':
 
         description_filter = input('Filter patterns by description (leave blank for all): ').strip()
         run_analysis(axl, logger, server, description_filter)
+
+    logger.info("Remedy Route Pattern Oneoff - Completed")

@@ -89,7 +89,7 @@ def find_duplicate_patterns(route_patterns):
     return sorted(duplicates, key=lambda x: x['last_11_digits'])
 
 
-def prompt_delete_patterns(duplicates, axl):
+def prompt_delete_patterns(duplicates, axl, logger):
     """
     Prompt user for each duplicate pair and delete '.+' patterns as confirmed.
 
@@ -163,7 +163,7 @@ def run_remediation(axl, logger):
     if duplicates:
         print(f'\nFound {len(duplicates)} duplicate-ish pattern pairs')
         logger.info(f'Found {len(duplicates)} duplicate-ish pattern pairs')
-        prompt_delete_patterns(duplicates, axl)
+        prompt_delete_patterns(duplicates, axl, logger)
     else:
         logger.info('No duplicate-ish patterns found')
         print('No duplicate-ish patterns found')
@@ -275,3 +275,5 @@ if __name__ == '__main__':
         axl = AXL(username=username, password=password, wsdl=wsdl, cucm=server, cucm_version=version)
 
         run_remediation(axl, logger)
+
+    logger.info("Remediate Duplicatish Route Patterns - Completed")

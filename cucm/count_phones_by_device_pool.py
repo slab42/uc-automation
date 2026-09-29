@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 # TITLE: Count Phones by Device Pool
 
-import warnings
-warnings.filterwarnings('ignore', category=Warning, module='urllib3')
-
 """
 Count phones (devices) in CUCM grouped by Device Pool.
 
@@ -19,7 +16,7 @@ The script is interactive and will prompt for:
 The script retrieves all phones from CUCM via AXL API, groups them by device
 pool, and optionally filters out analog devices and CTI ports before counting.
 
-Output is displayed on screen and logged to logs/<timestamp>-count_phones_by_device_pool.log
+Output is displayed on screen and logged to ../_logs/<timestamp>-count-phones-by-device-pool.log
 
 When excluding analog devices, the script filters out:
     - Products containing 'Analog' in the name
@@ -29,6 +26,9 @@ When excluding analog devices, the script filters out:
     - Products containing 'CTI' in the name (CTI ports, CTI OS ports)
 
 """
+
+import warnings
+warnings.filterwarnings('ignore', category=Warning, module='urllib3')
 
 from pathlib import Path
 import sys
@@ -351,3 +351,5 @@ if __name__ == '__main__':
 
         logger.info('Connected to CUCM: %s (version %s)', server, version)
         run_report(axl, logger, server, include_analog=include_analog)
+
+    logger.info("Count Phones By Device Pool - Completed")

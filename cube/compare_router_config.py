@@ -1,33 +1,62 @@
 #!/usr/bin/env python3
 # TITLE: Compare Router Config Templates
+
 """
 Cisco Router Config Template Comparator
 
-Compares router running configs to a template, focusing on voice sections.
-Connects via SSH and generates HTML reports for each router.
+Compares router running configs to a voice configuration template. Connects
+via SSH and generates an HTML report per router.
 
-CSV Format (headers optional, searched by name):
-  router_ip,hostname
-  192.168.1.1,router-01
-  192.168.1.2,router-02
+Usage:
+    python3 compare_router_config.py
+
+The script is interactive and will prompt for:
+    Template config file path: path to the voice config template
+        (default: _DATA/router_config_template.txt; copy
+        _DATA/examples/router_config_template.EXAMPLE to that path and edit
+        it to define the sections you want to validate)
+    CUBE Router(s): select from routers.csv or provide manually
+    Use multiple routers?: (Y/n): use all routers found in routers.csv,
+        or select a single router
+    Credentials: checks stored credentials in credentials.env
+    Use same credentials for all routers?: (Y/n) (multi-router mode only)
 
 Template Format:
   Plain text file with voice configuration sections (e.g., voice class, voice-port, dial-peer).
   Only sections present in template are checked; missing sections in router config are ignored.
+
+Router list from CSV file (_DATA/routers.csv):
+  router_ip,hostname
+  192.168.1.1,router-01
+  192.168.1.2,router-02
+
+Credentials from .env/credentials.env:
+    [CUBE:default] - Single credential set for all routers
+    [CUBE:<hostname>] - Per-router credentials matched by hostname
+
+Output: HTML reports written to _DATA/reports/<timestamp>-<hostname>_comparison.html
+Logs: ../_logs/<timestamp>-compare-router-config.log
 """
+
+from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import warnings
 warnings.filterwarnings('ignore')
 
-import csv
-import getpass
-import sys
-from pathlib import Path
 from datetime import datetime
 from difflib import SequenceMatcher
 from html import escape
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+from setup.logger import setup_logger
+from setup.prompt_utils import prompt_yes_no
+from setup.multi_object_loader import (
+    get_object_for_single_operation,
+    load_credentials,
+    get_objects_for_multi_operation,
+    load_credentials_for_multi_objects
+)
 
 try:
     from netmiko import ConnectHandler
@@ -36,8 +65,33 @@ except ImportError:
     print("ERROR: netmiko not installed. Install with: pip install netmiko")
     sys.exit(1)
 
-from cucm.general import findFiles
-from setup.logger import setup_logger
+# SSH connection settings
+SSH_DEVICE_TYPE = 'cisco_ios'
+SSH_PORT = 22
+SSH_TIMEOUT = 15
+
+
+def build_device(router, username, password):
+    """Build a netmiko device dict from a router dict and credentials.
+
+    Args:
+        router (dict): Router dict with 'name' (hostname) and 'ip' keys.
+        username (str): SSH username.
+        password (str): SSH password.
+
+    Returns:
+        dict: netmiko connection params plus 'ip'/'hostname' for display.
+    """
+    return {
+        'device_type': SSH_DEVICE_TYPE,
+        'host': router['ip'],
+        'username': username,
+        'password': password,
+        'port': SSH_PORT,
+        'timeout': SSH_TIMEOUT,
+        'ip': router['ip'],
+        'hostname': router['name']
+    }
 
 
 class ConfigParser:
@@ -100,6 +154,7 @@ class ConfigComparator:
     """Compare template config to router config."""
 
     def __init__(self, template_sections):
+        """Store the template sections to compare router configs against."""
         self.template_sections = template_sections
 
     def compare(self, router_sections):
@@ -153,7 +208,7 @@ class ConfigComparator:
 
 
 def read_template_file(template_path):
-    """Read and parse template config file."""
+    """Read and parse template config file into voice sections."""
     try:
         with open(template_path, 'r') as f:
             config_text = f.read()
@@ -163,38 +218,6 @@ def read_template_file(template_path):
         return None
     except Exception as e:
         print(f"ERROR: Failed to read template: {e}")
-        return None
-
-
-def read_csv_routers(csv_path):
-    """Read router list from CSV file."""
-    routers = []
-    try:
-        with open(csv_path, 'r') as f:
-            reader = csv.DictReader(f)
-            if not reader.fieldnames:
-                print("ERROR: CSV file is empty")
-                return None
-
-            ip_col = next((h for h in reader.fieldnames if h.lower() in ['router_ip', 'ip', 'address']), None)
-            host_col = next((h for h in reader.fieldnames if h.lower() in ['hostname', 'name', 'router_name']), None)
-
-            if not ip_col or not host_col:
-                print(f"ERROR: CSV must contain 'router_ip' and 'hostname' columns. Found: {reader.fieldnames}")
-                return None
-
-            for row in reader:
-                routers.append({
-                    'ip': row[ip_col].strip(),
-                    'hostname': row[host_col].strip()
-                })
-
-        return routers if routers else None
-    except FileNotFoundError:
-        print(f"ERROR: File not found: {csv_path}")
-        return None
-    except Exception as e:
-        print(f"ERROR: Failed to read CSV: {e}")
         return None
 
 
@@ -284,14 +307,14 @@ def generate_html_report(hostname, template_sections, comparison_result, output_
 
     if comparison_result['missing_sections']:
         html += '<div class="section">'
-        html += '<div class="section-title">❌ Missing Sections (in template but not in router config)</div>'
+        html += '<div class="section-title">Missing Sections (in template but not in router config)</div>'
         for section in sorted(comparison_result['missing_sections']):
             html += f'<div class="variance-type missing">{escape(section)}</div>'
         html += '</div>'
 
     if comparison_result['extra_sections']:
         html += '<div class="section">'
-        html += '<div class="section-title">ℹ️ Extra Sections (in router config but not in template)</div>'
+        html += '<div class="section-title">Extra Sections (in router config but not in template)</div>'
         for section in sorted(comparison_result['extra_sections']):
             html += f'<div class="variance-type extra">{escape(section)}</div>'
         html += '</div>'
@@ -300,7 +323,7 @@ def generate_html_report(hostname, template_sections, comparison_result, output_
         for section_name in sorted(comparison_result['section_diffs'].keys()):
             diff = comparison_result['section_diffs'][section_name]
             html += '<div class="section">'
-            html += f'<div class="section-title">📝 {escape(section_name)}</div>'
+            html += f'<div class="section-title">{escape(section_name)}</div>'
 
             html += '<div style="margin-top: 10px;">'
 
@@ -337,8 +360,19 @@ def generate_html_report(hostname, template_sections, comparison_result, output_
         return False
 
 
-def process_single_router(device_config, template_sections, logger):
-    """Process a single router comparison."""
+def process_single_router(device_config, template_sections, reports_dir, logger):
+    """Retrieve, compare, and generate an HTML report for a single router.
+
+    Args:
+        device_config (dict): netmiko device dict (from build_device).
+        template_sections (dict): Parsed voice sections from the template.
+        reports_dir (Path): Directory to write the HTML report into.
+        logger: logger instance.
+
+    Returns:
+        dict: {'success': bool, 'file': str, 'result': dict} on success,
+            {'success': False} on failure.
+    """
     hostname = device_config['hostname']
 
     print(f"\n{'='*80}")
@@ -358,9 +392,7 @@ def process_single_router(device_config, template_sections, logger):
     comparison_result = comparator.compare(router_sections)
 
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    output_file = f"reports/{timestamp}-{hostname}_comparison.html"
-
-    Path("reports").mkdir(exist_ok=True)
+    output_file = str(reports_dir / f"{timestamp}-{hostname}_comparison.html")
 
     if generate_html_report(hostname, template_sections, comparison_result, output_file):
         logger.info(f"Report generated: {output_file}")
@@ -371,22 +403,42 @@ def process_single_router(device_config, template_sections, logger):
         return {'success': False}
 
 
-def main():
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    log_file = f"../_logs/{timestamp}-compare_router_config.log"
-    logger = setup_logger(log_file)
+def print_summary(results):
+    """Print a console summary of comparison results."""
+    print("\n" + "="*80)
+    print("Summary")
+    print("="*80)
+    successful = sum(1 for r in results if r['success'])
+    print(f"Completed: {successful}/{len(results)} successful\n")
 
-    logger.info("Router Config Comparison - Started")
+    for result in results:
+        if result['success']:
+            has_variances = (
+                result['result']['missing_sections'] or
+                result['result']['extra_sections'] or
+                result['result']['section_diffs']
+            )
+            status = "✗ VARIANCES" if has_variances else "✓ COMPLIANT"
+            print(f"{status}: {result['file']}")
+
+    return successful
+
+
+def main():
+    """Entry point: load template/routers/credentials, compare configs, write reports."""
+    basepath = Path.cwd()
+
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    log_file = f"../_logs/{timestamp}-compare-router-config.log"
+    logger = setup_logger(log_file)
+    logger.info("Compare Router Config - Started")
 
     print("="*80)
     print("Router Configuration Template Comparator")
     print("="*80)
 
-    template_path = input("\nEnter path to template config file: ").strip()
-    if not template_path:
-        logger.error("No template file provided")
-        print("ERROR: Template file path required")
-        return
+    default_template = str(basepath.parent / '_DATA' / 'router_config_template.txt')
+    template_path = input(f"\nEnter path to template config file [{default_template}]: ").strip() or default_template
 
     template_sections = read_template_file(template_path)
     if not template_sections:
@@ -396,88 +448,44 @@ def main():
     logger.info(f"Loaded template with {len(template_sections)} voice sections")
     print(f"✓ Template loaded with {len(template_sections)} voice sections")
 
-    mode = input("\nSingle router or CSV mode? (s/c) [default: c]: ").strip().lower()
-    if mode == 's':
-        hostname = input("Enter router hostname: ").strip()
-        router_ip = input("Enter router IP address: ").strip()
+    reports_dir = basepath.parent / '_DATA' / 'reports'
+    reports_dir.mkdir(parents=True, exist_ok=True)
 
-        username = input("Enter SSH username: ").strip()
-        password = getpass.getpass("Enter SSH password: ")
-
-        device = {
-            'device_type': 'cisco_ios',
-            'host': router_ip,
-            'username': username,
-            'password': password,
-            'port': 22,
-            'timeout': 15,
-            'ip': router_ip,
-            'hostname': hostname
-        }
-
-        result = process_single_router(device, template_sections, logger)
-        if result['success']:
-            logger.info("Single router comparison completed successfully")
-        else:
-            logger.error("Single router comparison failed")
+    devices = []
+    routers = get_objects_for_multi_operation(basepath, 'CUBE')
+    if routers:
+        use_multiple = prompt_yes_no(f'{len(routers)} routers found. Use multiple routers?', default=True)
     else:
-        csv_input = input("Enter path to CSV file [default: _DATA/routers.csv]: ").strip()
-        if not csv_input:
-            csv_input = "../_DATA/routers.csv"
+        use_multiple = False
 
-        routers = read_csv_routers(csv_input)
-        if not routers:
-            logger.error("No routers found in CSV")
-            return
-
-        logger.info(f"Found {len(routers)} router(s) from CSV")
-        print(f"\n✓ Found {len(routers)} router(s):")
-        for r in routers:
-            print(f"  - {r['hostname']} ({r['ip']})")
-
-        username = input("\nEnter SSH username: ").strip()
-        password = getpass.getpass("Enter SSH password: ")
-
-        devices = []
+    if use_multiple:
+        use_same = prompt_yes_no('Use same credentials for all routers?', default=True)
+        router_credentials = load_credentials_for_multi_objects('CUBE', routers, use_same=use_same)
         for router in routers:
-            devices.append({
-                'device_type': 'cisco_ios',
-                'host': router['ip'],
-                'username': username,
-                'password': password,
-                'port': 22,
-                'timeout': 15,
-                'ip': router['ip'],
-                'hostname': router['hostname']
-            })
+            username, password = router_credentials[router['name']]
+            devices.append(build_device(router, username, password))
+    else:
+        router = get_object_for_single_operation(basepath, 'CUBE')
+        if not router:
+            print("Error: Unable to load router information")
+            sys.exit(1)
+        username, password = load_credentials('CUBE', router['name'])
+        devices.append(build_device(router, username, password))
 
-        print("\n" + "="*80)
-        print("Processing routers...")
-        print("="*80)
+    print("\n" + "="*80)
+    print("Processing routers...")
+    print("="*80)
 
-        results = []
-        for i, device in enumerate(devices, 1):
-            logger.info(f"Processing router {i}/{len(devices)}")
-            result = process_single_router(device, template_sections, logger)
-            results.append(result)
+    results = []
+    for i, device in enumerate(devices, 1):
+        logger.info(f"Processing router {i}/{len(devices)}")
+        result = process_single_router(device, template_sections, reports_dir, logger)
+        results.append(result)
 
-        print("\n" + "="*80)
-        print("Summary")
-        print("="*80)
-        successful = sum(1 for r in results if r['success'])
-        print(f"Completed: {successful}/{len(results)} successful\n")
+    successful = print_summary(results)
+    print(f"\nReports written to: {reports_dir}")
 
-        for result in results:
-            if result['success']:
-                has_variances = (
-                    result['result']['missing_sections'] or
-                    result['result']['extra_sections'] or
-                    result['result']['section_diffs']
-                )
-                status = "✗ VARIANCES" if has_variances else "✓ COMPLIANT"
-                print(f"{status}: {result['file']}")
-
-        logger.info(f"Router Config Comparison - Completed ({successful}/{len(results)} successful)")
+    logger.info(f"Compare Router Config - Completed ({successful}/{len(results)} successful)")
 
 
 if __name__ == "__main__":

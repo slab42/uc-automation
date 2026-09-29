@@ -48,8 +48,8 @@ This must never be changed. Six verified reasons:
    `basepath.parent / '_DATA' / 'clusters.csv'`) resolved against **their
    own** working directory. The child process is launched with
    `cwd=str(entry.path.parent)` for exactly this reason.
-3. `sys.exit()` appears in 37 files / 83 call sites across `cucm/cuc/cube/webex`
-   (verified 2026-09-24; the constant `SystemExit` in a shared process would
+3. `sys.exit()` appears in 37 files / 86 call sites across `cucm/cuc/cube/webex`
+   (verified 2026-09-28; the constant `SystemExit` in a shared process would
    kill the launcher, not just the script).
 4. `setup/logger.py` uses a module-global `logging.getLogger('my_logger')`
    and **appends** a handler on every call. Two scripts sharing one process
@@ -67,33 +67,32 @@ This must never be changed. Six verified reasons:
 | `runpy.run_path()` | Same in-process failure modes as `import` (reasons 1–6 above). |
 | `import` of a target script | Same as above; also 14 webex scripts execute their body on import (reason 6). |
 | `exec()` on script source | Same as above, plus loses the script's own `__file__`/`sys.argv[0]`. |
-| `capture_output=` / `stdout=` / `stderr=` | Stdio must stay inherited: 42 of the 48 scripts call `input()` and 3 call `getpass()` — capturing stdio breaks every prompt. |
+| `capture_output=` / `stdout=` / `stderr=` | Stdio must stay inherited: 42 of the 48 scripts call `input()` and 1 calls `getpass()` directly (the rest prompt through `setup/multi_object_loader.py`) — capturing stdio breaks every prompt. |
 | `shell=True` | No shell interpretation needed, and 5 script filenames contain hyphens (e.g. `remedy-RP-oneoff.py`, `compare_advP-RP.py`) that a shell command line would need careful quoting for. |
 | `start_new_session=True` | Would detach the child into its own process group, orphaning it from the launcher's Ctrl-C — a hung script would become unkillable instead of exiting with code 130. |
 | `Path.cwd()` (in the launcher, for the child's cwd) | Resolves to the *launcher's* directory, not the script's — use `entry.path.parent` instead (reason 2). |
 
-## 4. Verified codebase facts (verified 2026-09-24)
+## 4. Verified codebase facts (re-verified 2026-09-28)
 
 - **Counts** (via `python3 main.py --list`): CUCM 25, CUC 7, CUBE 2, Webex 14 — **total 48**.
-- **`ast.get_docstring()` returns `None` for 24 files** scanned under
+- **`ast.get_docstring()` returns `None` for 11 files** scanned under
   `cucm/cuc/cube/webex` (excluding `DEV/`, `schema/`, `examples/`). Breakdown:
-  - 15 CUCM files put a statement — `import warnings` / `warnings.simplefilter('ignore')` —
-    **before** their triple-quoted description, so it's a bare `Expr`, not a
-    docstring. 13 of these are live menu scripts; 2 (`cucm/find_css_table.py`,
-    `cucm/test_css_schema.py`) are denylisted throwaway probes.
-  - 1 CUCM file, `cucm/general.py` (denylisted support module), has no string at all.
+  - 3 denylisted CUCM support/probe files (`cucm/general.py` has no string at all;
+    `cucm/find_css_table.py` and `cucm/test_css_schema.py` put `import warnings`
+    before their description).
   - 8 Webex scripts have no string at all.
-  - This is why `read_description()` falls back to scanning for the first bare
-    string `Expr` anywhere in `tree.body` — reverting that to plain
-    `ast.get_docstring()` breaks the `i` (details) view for all 21 live
-    scripts in the first two bullets above.
+  - As of 2026-09-28 every live CUCM, CUC and CUBE script has its docstring as the
+    first statement (the 13 live CUCM scripts that used to put `import warnings`
+    above it were reordered). `read_description()` still falls back to scanning
+    for the first bare string `Expr` because the two denylisted probes and any
+    future slip would otherwise lose their `i` (details) text.
 - **10 scripts** are flagged `takes_args=True` (shown as `[args]` in the menu):
   9 build an `argparse.ArgumentParser`; the 10th, `cucm/em_bulk_login.py`,
   instead indexes `sys.argv` directly for an undocumented-to-argparse
   positional `debug <device>` mode (`python3 em_bulk_login.py debug SEP...`).
   This is what the `a` (run with args) command exists for.
 - **Denylist** (`_DENYLIST` in `script_registry.py`) and why:
-  - `cucm/ucmAPI.py`, `cucm/general.py` — support modules, not runnable standalone.
+  - `cucm/ucmAPI.py`, `cucm/general.py`, `cuc/cucAPI.py` — support modules, not runnable standalone.
   - `cucm/test_css_schema.py`, `cucm/find_css_table.py` — throwaway schema probes.
   - `setup/test_credentials_loader.py` — a test.
 - **`webex/DEV/`** is excluded via `_SKIP_DIR_PARTS` as scratch/experimental
@@ -101,16 +100,18 @@ This must never be changed. Six verified reasons:
   design drop all nested-folder handling, breadcrumbs, and multi-level
   back-navigation — the menu is exactly two levels deep (main → category/favorites).
 - **26 cucm scripts** (24 live + the 2 denylisted probes) use the bare
-  `from ucmAPI import AXL` sibling import described in Section 3.
+  `from ucmAPI import AXL` sibling import described in Section 3, and the **6 cuc
+  scripts that talk to a server** use the equivalent bare `from cucAPI import CUC`
+  (`cuc/build_call_trees.py` is offline and imports neither). Both only
+  resolve when the child's cwd is the script's own directory.
+- `sys.exit()` is 37 files / 86 call sites in the live scope; 42 files call
+  `input()`; 1 file (`cube/check_router_mem_status.py`, its `--default` path)
+  calls `getpass()` directly, every other password prompt goes through
+  `setup/multi_object_loader.py`. Stdio must stay inherited (Section 3).
 - Note on scope: every count here is over `cucm/`, `cuc/`, `cube/` and `webex/`,
-  excluding `webex/DEV/`. Widening the scope changes them — e.g. `sys.exit()` is
-  37 files / 83 sites in that scope, 39 / 85 including `DEV/`, and 41 / 87 across
-  the whole repo including `setup/`. State the scope whenever you quote a number.
-  An earlier draft of this design carried unverified figures ("41 files / 100+
-  call sites", "49 files call input()", "three filenames contain hyphens");
-  direct verification on 2026-09-24 gave 37/83, 42 files, and 5 hyphenated
-  filenames respectively. `setup/menu.py`'s module docstring was corrected to
-  match. Re-verify rather than trusting any of these after scripts change.
+  excluding `webex/DEV/`. Widening the scope changes them. State the scope
+  whenever you quote a number, and re-verify rather than trusting any of these
+  after scripts change.
 
 ## 5. Decision record
 
@@ -191,3 +192,10 @@ instead of overwriting a file it doesn't fully understand.
 **2026-09-24** — Initial build: `main.py` launcher added; `# TITLE:` convention
 introduced across all 48 scripts; favorites/hidden persistence via
 `.var/launcher.json`; title-as-gate behavior (no docstring/filename fallback).
+
+**2026-09-28** — Standards audit: CUC and CUBE scripts brought to the CUCM
+layout (docstring first, logger created first, `../_logs/` paths, cluster/router
+selection only through `setup/multi_object_loader.py`); `cuc/cucAPI.py` added
+and denylisted; 13 CUCM scripts reordered so the docstring precedes
+`import warnings`; `cucm/lookup_device_type.py` logger call fixed. No launcher
+code changed other than the denylist entry. Section 4 counts re-verified.

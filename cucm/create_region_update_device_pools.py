@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 # TITLE: Create Region and update Device Pools
 
-import warnings
-warnings.simplefilter('ignore')
-
 """
 Create a Region with Audio Codec Preference List and Max Audio Bit Rate
 Then update all Device Pools to use the new Region
@@ -22,6 +19,9 @@ max_audio_bit_rate values: 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160,
 
 For multiple clusters, create a clusters.csv file with cluster configurations.
 """
+
+import warnings
+warnings.simplefilter('ignore')
 
 from pathlib import Path
 import sys
@@ -254,3 +254,5 @@ if __name__ == '__main__':
             codec_pref_list = input('Audio Codec Preference List Name (optional): ') or ''
             max_audio_bit_rate = input('Maximum Audio Bit Rate in kbps (optional): ') or ''
             process_region(axl, logger, region_name, codec_pref_list, max_audio_bit_rate)
+
+    logger.info("Create Region Update Device Pools - Completed")

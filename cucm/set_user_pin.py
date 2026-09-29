@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 # TITLE: Set User PIN
 
-import warnings
-warnings.simplefilter('ignore')
-
 """
 Set User PIN Script
 
@@ -29,6 +26,9 @@ Usage:
 
   Logs output to: ../_logs/{timestamp}-set-user-pin.log
 """
+
+import warnings
+warnings.simplefilter('ignore')
 
 from pathlib import Path
 import sys
@@ -218,3 +218,5 @@ if __name__ == '__main__':
 
     # Run main operation
     main(basepath, logger, data, axl_client)
+
+    logger.info("Set User PIN Script - Completed")

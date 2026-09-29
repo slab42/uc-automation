@@ -1,6 +1,6 @@
 # Cisco Unity Connection (CUC) Automation Scripts
 
-This directory contains Python scripts for automating Cisco Unity Connection (CUC) management tasks. These scripts query and manage users, mailboxes, and call handlers via CUC's REST API.
+This directory contains Python scripts for automating Cisco Unity Connection (CUC) management tasks. Scripts query and manage users, mailboxes, and call handlers via CUC's `/vmrest` REST API.
 
 ## Quick Start
 
@@ -8,40 +8,53 @@ This directory contains Python scripts for automating Cisco Unity Connection (CU
 
 - Python 3.6+
 - Required packages: `requests`, `lxml`, `urllib3`
+- `openpyxl` (only for `build_call_trees.py`)
 
 Install dependencies:
 ```bash
-pip install requests lxml urllib3
+pip install requests lxml urllib3 openpyxl
 ```
 
 ### Configuration
 
-1. Copy the template: `cp cuc-info.json.EXAMPLE cuc-info.json`
-2. Fill in your CUC server details:
-   ```json
-   {
-     "server": "192.168.25.20",
-     "username": "admin",
-     "password": "",
-     "version": "15.0"
-   }
-   ```
-   - Leave `password` blank to be prompted at runtime (recommended for security)
-   - The password prompt will never display input on screen
+CUC scripts share the same configuration as CUCM scripts (see the repo root `CLAUDE.md`):
+
+- **`_DATA/clusters.csv`** - add a row per CUC server with `cluster_type=cuc`. Server_type is normally `publisher`.
+  ```csv
+  cluster_type,server_type,cluster_name,server,version
+  cuc,publisher,CUC1,192.168.25.20,15.0
+  ```
+- **`.env/credentials.env`** - CUC credentials, looked up per-cluster then falling back to default:
+  ```ini
+  [CUC:default]
+  username = admin
+  password =
+
+  [CUC:CUC1]
+  username = cuc1_admin
+  password =
+  ```
+  Leave `password` blank to be prompted at runtime; passwords are never echoed or logged.
+
+If `_DATA/clusters.csv` has no CUC rows, scripts fall back to prompting for the server address manually.
 
 ### Running Scripts
 
-All scripts follow the same interactive pattern:
+Run any script directly, or launch `python3 main.py` from the repo root for the interactive category menu:
 ```bash
-python3 script_name.py
-# Prompts for:
-# - Config file path (default: cuc-info.json)
-# - Password (if not in config file)
-# - Input mode (single or CSV)
-# - Additional options per script
+python3 cuc/list_CallHandlers.py
+# Prompts to select a CUC cluster from clusters.csv (or enter one manually)
+# Prompts for credentials (checks CUC:default / CUC:<cluster_name> first)
+# Prompts for script-specific options (CSV paths, single vs. multi-cluster, etc.)
 ```
 
-Logs are written to `logs/<timestamp>-<script_name>.log` with all operations and errors.
+Logs are written to the repo-root `_logs/` directory as `_logs/<timestamp>-<script-name>.log`. Input/output CSVs default to the repo-root `_DATA/` directory; example CSVs for every script live in `_DATA/examples/`.
+
+## Support Module
+
+### cucAPI.py
+
+`CUC` class wraps a `requests.Session` against `https://<server>/vmrest` with basic auth, XML parsing (via `lxml`), retry logic, and pagination. It is the counterpart of `cucm/ucmAPI.py` and is used by every script in this directory; it is not itself a runnable script (it does not appear in the `main.py` menu). Every public method returns `{'success': bool, 'response': <payload>, 'error': str}`. Key methods: `find_user_by_extension()`, `get_mailbox_attributes()`, `get_user_mailbox_usage()`, `delete_user()`, `list_call_handlers()` (paginated), `get_menu_entries()`, `delete_call_handler()`.
 
 ## Scripts
 
@@ -49,35 +62,16 @@ Logs are written to `logs/<timestamp>-<script_name>.log` with all operations and
 
 **Purpose:** Query a user by extension and display detailed mailbox information.
 
-**Usage:**
-```bash
-python3 check_userMailbox.py
-```
+**Prompts:** CUC cluster, credentials, use multiple clusters?, use CSV?, extension (single mode) or CSV path (CSV mode).
 
-**Prompts:**
-- CUC JSON File (default: `cuc-info.json`)
-- Single user or CSV mode (y/n)
-- Extension (single mode) or CSV file path (CSV mode)
-
-**CSV Input Format:**
+**CSV Input Format (extension):**
 ```
 extension
 2001
 2002
-2003
 ```
 
-**Output:**
-Displays per user:
-- Display Name, Alias
-- Mailbox status (Primary, Store Mounted, Mailbox Mounted, Store Overflow)
-- Current size in MB and bytes
-- Quota limits (Warning, Receive, Send)
-- Quota exceeded status for each quota type
-
-**Version Support:**
-- CUC 15.4+: Uses `DtmfAccessId` field
-- CUC < 15.4: Uses `DtmfAccessId` field
+**Output:** Mailbox report printed to console and logged for each extension checked.
 
 ---
 
@@ -85,95 +79,111 @@ Displays per user:
 
 **Purpose:** Export mailbox usage data for users to a CSV file.
 
-**Usage:**
-```bash
-python3 check_userMailboxUsage.py
-```
+**Prompts:** CUC cluster, credentials, use CSV?, extension (single mode) or CSV path (CSV mode), output file name (CSV mode).
 
-**Prompts:**
-- CUC JSON File (default: `cuc-info.json`)
-- Single user or CSV mode (y/n)
-- Extension (single mode) or CSV file path (CSV mode)
-- Output file name (CSV mode only, default: `mailbox_usage_report.csv`)
-
-**CSV Input Format:**
+**CSV Input Format (extension):**
 ```
 extension
 2001
 2002
-2003
 ```
 
-**CSV Output Format:**
+**CSV Output Format (dtmfAccessID, alias, mailboxSize):**
 ```
 dtmfAccessID,alias,mailboxSize
-2001,john.doe,125.45
-2002,jane.smith,234.56
-2003,bob.jones,0.00
+2001,user1,123.45
+2002,user2,456.78
 ```
-
-**Features:**
-- Queries mailbox size for each user
-- Outputs size in MB
-- Single user mode prints one line per user
-- CSV mode processes batch and exports all results
 
 ---
 
 ### list_CallHandlers.py
 
-**Purpose:** Export all Call Handlers from CUC to a CSV file.
+**Purpose:** Export non-subscriber, non-system Call Handlers from CUC to a CSV file for use with `delete_CallHandlers.py`.
 
-**Usage:**
-```bash
-python3 list_CallHandlers.py
-```
+**Prompts:** CUC cluster, credentials, use multiple clusters?, output CSV file (default `_DATA/callhandlers.csv`). In multi-cluster mode, each cluster's output file is suffixed with `-<cluster_name>`.
 
-**Prompts:**
-- CUC JSON File (default: `cuc-info.json`)
-- Output CSV file name (default: `callhandlers.csv`)
-
-**CSV Output Format:**
+**CSV Output Format (displayName, extension, objectId):**
 ```
 displayName,extension,objectId
-Main Menu,2000,ca8cdbd5-9b1b-4893-9237-171d78b5c6a2
+Sales Menu,2000,ca8cdbd5-9b1b-4893-9237-171d78b5c6a2
 Support Queue,2001,f349f979-308b-4fad-b110-f58c132c2cae
 ```
 
 **Features:**
-- Exports all non-user call handlers
+- Uses `cucAPI.CUC.list_call_handlers()` (fully paginated)
 - Skips built-in handlers: Opening Greeting, Operator, Goodbye, undeliverablemessagesmailbox
-- Filters out user-specific handlers
-- Includes ObjectId for use with delete_CallHandlers.py
+- Filters out subscriber (user) handlers
 
 ---
 
 ### delete_CallHandlers.py
 
-**Purpose:** Delete Call Handlers from a CSV file (generated by list_CallHandlers.py).
+**Purpose:** Delete Call Handlers from a CSV file (generated by `list_CallHandlers.py`).
 
-**Usage:**
-```bash
-python3 delete_CallHandlers.py
-```
+**Prompts:** CUC cluster, credentials, use multiple clusters?, prompt for each delete (y/n, default: no), input CSV file (default `_DATA/callhandlers.csv`).
 
-**Prompts:**
-- CUC JSON File (default: `cuc-info.json`)
-- Prompt for each delete (y/n, default: no)
-- Input CSV file (default: `callhandlers.csv`)
-
-**CSV Input Format:**
+**CSV Input Format (displayName, extension, objectId):**
 ```
 displayName,extension,objectId
 Test,,9cb5b41c-7ac4-4a42-a18f-b985d7c3acc0
 test2-level2,,f349f979-308b-4fad-b110-f58c132c2cae
 ```
 
+**Warning:** ObjectIds are per-cluster. In multi-cluster mode the same CSV is applied to every selected cluster, so only use it when the CSV's objectIds genuinely belong to each of those clusters; otherwise run the script once per cluster with a CSV exported from that cluster.
+
 **Features:**
-- Requires ObjectId from list_CallHandlers.py output
 - Optional confirmation prompt before each delete
-- Logs success/failure for each handler
-- Provides summary at end (deleted count, failed count)
+- Logs success/failure per handler and prints a summary (deleted / failed / skipped)
+
+---
+
+### list_NonSubscriber_CallHandlers_WithMenuEntries.py
+
+**Purpose:** Export every non-subscriber Call Handler and its MenuEntries, for input into `build_call_trees.py`.
+
+**Prompts:** CUC cluster, credentials, use multiple clusters?, Call Handler CSV output (default `_DATA/non_subscriber_callhandlers.csv`), Menu Entry CSV output (default `_DATA/menuentries.csv`). In multi-cluster mode, both output files are suffixed with `-<cluster_name>`.
+
+**CSV Output Format - Call Handlers (displayName, extension, objectId, uri):**
+```
+displayName,extension,objectId,uri
+Sales Menu,2000,ca8cdbd5-9b1b-4893-9237-171d78b5c6a2,/vmrest/handlers/callhandlers/ca8cdbd5-9b1b-4893-9237-171d78b5c6a2
+```
+
+**CSV Output Format - Menu Entries (sourceHandler, sourceExtension, sourceObjectId, touchToneKey, locked, actionCode, destinationType, destinationName, targetConversation, targetHandlerObjectId, targetHandlerName, transferDisplayName, transferNumber, transferType, transferRings, menuEntryObjectId, menuEntryUri):**
+```
+sourceHandler,sourceExtension,sourceObjectId,touchToneKey,locked,actionCode,destinationType,destinationName,targetConversation,targetHandlerObjectId,targetHandlerName,transferDisplayName,transferNumber,transferType,transferRings,menuEntryObjectId,menuEntryUri
+Sales Menu,2000,ca8cdbd5-9b1b-4893-9237-171d78b5c6a2,1,FALSE,3,Call Handler,Support Queue,,f349f979-308b-4fad-b110-f58c132c2cae,Support Queue,,,,,menuentry-obj-1,/vmrest/handlers/callhandlers/ca8cdbd5-9b1b-4893-9237-171d78b5c6a2/menuentries/menuentry-obj-1
+```
+
+**Also writes** `<menu CSV stem>_errors.csv` listing any handler whose menu entries could not be retrieved.
+
+**Features:**
+- Classifies each handler as subscriber vs. non-subscriber via `RecipientSubscriberObjectId`
+- Skips the same built-in handlers as `list_CallHandlers.py`
+- Classifies each MenuEntry's destination as Transfer, Call Handler, Subscriber Mailbox, Unknown Handler, Conversation, or No configured destination
+- Logs per-handler MenuEntry counts and a final summary
+
+---
+
+### build_call_trees.py
+
+**Purpose:** Offline tool (no CUC connection) that turns the two CSVs above into a formatted `call_trees.xlsx` workbook showing the call-flow tree rooted at each handler that is a source but never a target.
+
+**Prompts:** Call Handler CSV (default `_DATA/non_subscriber_callhandlers.csv`), Menu Entry CSV (default `_DATA/menuentries.csv`), Excel output file (default `_DATA/call_trees.xlsx`).
+
+**Required CSV columns:**
+- Call Handler CSV: `displayName`, `extension`, `objectId`, `uri`
+- Menu Entry CSV: `sourceHandler`, `sourceExtension`, `sourceObjectId`, `touchToneKey`, `destinationType`, `destinationName`, `targetHandlerObjectId`
+
+**Output workbook sheets:**
+- **Summary** - counts of handlers, menu entries, roots, orphans, and issues
+- **Call Handlers** - the imported Call Handler CSV
+- **Menu Entries** - the imported Menu Entry CSV
+- **Root Handlers** - handlers that are a source but never a target
+- **Call Trees** - one row per menu entry reached from each root, indented by depth; CIRCULAR REFERENCE / TARGET NOT FOUND rows are highlighted
+- **Orphan Handlers** - handlers that are neither a source nor a target
+- **Issues** - every circular reference, missing target, and depth-overflow (MAX_DEPTH=50) issue found
 
 ---
 
@@ -181,145 +191,80 @@ test2-level2,,f349f979-308b-4fad-b110-f58c132c2cae
 
 **Purpose:** Delete empty mailboxes from CUC and export remaining mailboxes to CSV.
 
-**Usage:**
-```bash
-python3 cleanup_emptyMailboxes.py
-```
+**Prompts:** CUC cluster, credentials, prompt for each delete (y/n, default: no), input CSV file (default `_DATA/mailboxes.csv`), output file name (default `_DATA/mailbox_usage_remaining.csv`).
 
-**Prompts:**
-- CUC JSON File (default: `cuc-info.json`)
-- Prompt for each delete (y/n, default: no)
-- Input CSV file (default: `mailboxes.csv`)
-- Output file name (default: `mailbox_usage_remaining.csv`)
-
-**CSV Input Format:**
+**CSV Input Format (extension):**
 ```
 extension
 2001
 2002
-2003
 ```
 
 **CSV Output Format (remaining mailboxes):**
 ```
 dtmfAccessID,alias,mailboxSize
 2002,jane.smith,234.56
-2003,bob.jones,45.23
 ```
 
 **Workflow:**
 1. Reads extensions from input CSV
 2. Looks up each user and retrieves mailbox size
-3. For each mailbox with 0 size:
-   - Optionally prompts user for confirmation
-   - Attempts to delete the user (and their mailbox)
-   - Logs success or failure
-4. Exports all non-empty mailboxes to output CSV
-5. Displays summary of operations
-
-**Output Summary:**
-- Checked: total extensions processed
-- Deleted: count of successfully deleted empty mailboxes
-- Errors: count of failures during processing
-- Exported: count of remaining mailboxes with data
-
----
+3. For each mailbox with 0 size: optionally confirms, deletes the user (and mailbox), logs the result
+4. Exports all non-empty mailboxes to the output CSV
+5. Prints a summary: checked / deleted / errors / exported
 
 ## Common Patterns
 
-### Configuration File
-
-All scripts use a JSON configuration file:
-```json
-{
-  "server": "CUC_SERVER_IP_OR_HOSTNAME",
-  "username": "admin_username",
-  "password": "password_or_leave_blank",
-  "version": "15.0"
-}
-```
-
-**Security Note:** Leave password blank and enter at runtime prompt for security.
-
 ### Error Handling
 
-- Invalid config file: script exits with error message
-- CSV not found: script logs error and exits
-- API failures: logged with HTTP status code and response
-- Missing/invalid user: logged as warning, processing continues
+- Invalid cluster/credentials: script exits with an error message
+- CSV not found: script logs an error and exits
+- API failures: logged with HTTP status code and response body
+- Missing/invalid user or handler: logged as a warning or error; processing continues where it makes sense
 
 ### Logging
 
-All scripts create logs in the `logs/` directory with format:
+All scripts use the shared dual-output logger (`setup/logger.py`) writing to the repo-root `_logs/` directory:
 ```
-logs/<script>-<server>-<YYYY_MM_DD-HH_MM_SS>.log
+_logs/<timestamp>-<script-name>.log
 ```
-
-Each log includes:
-- Timestamp
-- Log level (INFO, WARNING, ERROR, DEBUG)
-- Detailed operation trace
-- Summary at end of run
+Each log includes a timestamp, log level, per-item operation trace, and a summary at the end of the run.
 
 ### Password Security
 
-The scripts implement the hard rule from CLAUDE.md:
-- Passwords are NEVER displayed on screen
-- When prompted, use `getpass` module (no echo)
-- Passwords entered at prompt are never logged
+Per the repo's hard rules (`CLAUDE.md`):
+- Passwords are never displayed on screen
+- Passwords come only from `.env/credentials.env` or an interactive `getpass` prompt
+- Passwords are never logged
+
+## CSV File Notes
+
+- All CSV files must have a header row
+- Scripts use `csv.DictReader` to parse headers flexibly; extra columns are ignored
+- Empty rows are skipped
+- Example files for every script's input/output CSV live in `_DATA/examples/`
 
 ## Troubleshooting
 
 ### "No user found with extension"
-- Check that extension exists in CUC
-- Verify correct CUC server in config file
-- Extension field may be DtmfAccessId or Alias depending on CUC version
+- Check that the extension exists in CUC
+- Verify the correct CUC server in `_DATA/clusters.csv`
 
 ### API Request Failed
-- Check network connectivity to CUC server
-- Verify username and password are correct
-- Check CUC server logs for authentication errors
-- Ensure user has required REST API permissions
+- Check network connectivity to the CUC server
+- Verify username and password in `.env/credentials.env`
+- Ensure the user has the required REST API permissions
 
 ### CSV File Not Found
-- Verify file path is correct and file exists
-- Use full absolute path if relative path fails
-- Check file permissions
-
-### Unexpected API Response
-- CUC version in config file may not match actual server version
-- Check CUC REST API schema for version differences
-- Review raw API response in logs
-
-## CSV File Notes
-
-- All CSV files must have a header row (field names)
-- Scripts use DictReader to parse headers flexibly
-- Extra columns in CSV are ignored for compatibility
-- Empty rows are skipped
-- Only the required field(s) must be present
-
-## Version Compatibility
-
-Scripts support:
-- CUC 15.0+
-- Tested with CUC 15.x and later
-
-For version-specific issues:
-- Check the extension field determination logic
-- Review API endpoint format for your version
-- Consult CUC REST API documentation for your version
+- Verify the file path is correct; use an absolute path if a relative one fails
 
 ## Dependencies
 
 - **requests** - HTTP library for API calls
 - **lxml** - XML parsing for API responses
 - **urllib3** - HTTP connection pooling and retries
+- **openpyxl** - Excel workbook generation (`build_call_trees.py` only)
 
 ## Related Documentation
 
-See the main project README for:
-- Project overview
-- Architecture patterns
-- Dependencies
-- Hard rules and conventions
+See the repo root `CLAUDE.md` for project overview, architecture patterns, dependencies, and hard rules.

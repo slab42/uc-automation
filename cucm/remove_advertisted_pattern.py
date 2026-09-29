@@ -18,7 +18,7 @@ The script is interactive and will prompt for:
 
     If 'y' (CSV):
         Enter CSV file name or full path: path to the CSV file
-            (default: rm_advertisedPatterns.csv)
+            (default: _DATA/rm_advertisedPatterns.csv)
 
 If removal of a pattern fails and the pattern does not already start with
 '+', the script automatically retries the removal with a '+' prefixed to
@@ -29,6 +29,7 @@ CSV format (pattern):
 
 The CSV may contain additional columns; only the "pattern" column is used.
 
+Logs: ../_logs/<timestamp>-remove-advertisted-pattern.log
 """
 
 from pathlib import Path
@@ -170,7 +171,7 @@ if __name__ == '__main__':
             if use_csv:
                 print('\nCSV Must have header row and must contain only 1 pattern per row')
                 print('Field Order: pattern')
-                csv_file = input('Enter CSV file name or full path: ') or 'rm_advertisedPatterns.csv'
+                csv_file = input('Enter CSV file name or full path [_DATA/rm_advertisedPatterns.csv]: ') or str(basepath.parent / '_DATA' / 'rm_advertisedPatterns.csv')
                 operation_params = {'type': 'csv', 'csv_file': csv_file}
             else:
                 operation_params = {'type': 'single'}
@@ -193,7 +194,7 @@ if __name__ == '__main__':
             if use_csv:
                 print('\nCSV Must have header row and must contain only 1 pattern per row')
                 print('Field Order: pattern')
-                csv_file = input('Enter CSV file name or full path: ') or 'rm_advertisedPatterns.csv'
+                csv_file = input('Enter CSV file name or full path [_DATA/rm_advertisedPatterns.csv]: ') or str(basepath.parent / '_DATA' / 'rm_advertisedPatterns.csv')
                 run_csv_file(axl, logger, csv_file)
             else:
                 run_single_pattern(axl, logger)
@@ -215,7 +216,9 @@ if __name__ == '__main__':
         if use_csv:
             print('\nCSV Must have header row and must contain only 1 pattern per row')
             print('Field Order: pattern')
-            csv_file = input('Enter CSV file name or full path: ') or 'rm_advertisedPatterns.csv'
+            csv_file = input('Enter CSV file name or full path [_DATA/rm_advertisedPatterns.csv]: ') or str(basepath.parent / '_DATA' / 'rm_advertisedPatterns.csv')
             run_csv_file(axl, logger, csv_file)
         else:
             run_single_pattern(axl, logger)
+
+    logger.info("Remove Advertisted Pattern - Completed")

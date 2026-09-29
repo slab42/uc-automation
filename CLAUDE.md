@@ -13,6 +13,9 @@ uc-automation is a collection of Python scripts for Unified Communications autom
 - Script comments should always be at the very top of the script
 - Customer variable files (.var files) are not checked in; each customer maintains their own .var file matching the .var.EXAMPLE
 - Every script must carry a `# TITLE: <short name>` line (max 40 chars, Title Case) within its first 5 lines - directly after the shebang, or as line 1 when there is no shebang. `main.py` uses it as the menu label, and a script without one will not appear in the launcher at all.
+- The module docstring is the first statement after the TITLE line. Nothing (not even `import warnings`) goes above it.
+- Logs always go to the repo-root `_logs/` folder: `log_file = f"../_logs/{timestamp}-<script-name>.log"`. Create the logger before any cluster selection or credential prompt, log `"<Title> - Started"` and `"<Title> - Completed"`, and pass `logger` into functions rather than relying on a module-global.
+- Cluster and router selection always goes through `setup/multi_object_loader.py` (single or multi object flow). Scripts never carry their own CSV reader or credential menu.
 
 ## Directory Structure
 
@@ -29,11 +32,15 @@ uc-automation is a collection of Python scripts for Unified Communications autom
   - `GET /telephony/config/locations` (Calling admin API, `spark-admin:telephony_config_read`) and `GET /v1/locations` (core/base Locations API, `spark-admin:locations_read`) are **different API families with different scopes** — this app's integration has the former, not the latter. Don't confuse them when debugging location-related 403s.
 
 - **cuc/** - Cisco Unity automation scripts
- - Schema artifacts
- - Use application.wadl file for schema first
+  - Individual operation scripts (mailbox checks, call handler export/delete, call tree workbook)
+  - `cucAPI.py` - REST (vmrest) client wrapper class, counterpart of `cucm/ucmAPI.py`; all CUC scripts use it
+  - `schema/<version>/` - REST schema artifacts; use application.wadl file for schema first
+  - Same cluster/credential flow as CUCM: select from `_DATA/clusters.csv` (`cluster_type=cuc` rows), single or multi cluster, credentials from `[CUC:<name>]` / `[CUC:default]`
 
 - **cube/** - Cisco CUBE scripts
-  - Individual operation scripts (add/remove/move patterns, update phone loads, etc.)
+  - Individual operation scripts (memory status check, config template comparison) over SSH via netmiko
+  - Same router/credential flow: select from `_DATA/routers.csv`, single or multi router, credentials from `[CUBE:<hostname>]` / `[CUBE:default]`
+  - HTML reports are written to `_DATA/reports/`
 
 - **setup/** - Shared utilities and loaders
   - `multi_object_loader.py` - loads clusters/routers from CSV and manages credential prompting
@@ -67,6 +74,10 @@ Key dependencies:
 - `requests` - HTTP library with retry logic
 - `lxml` - XML parsing
 - `urllib3` - HTTP with connection pooling
+
+Optional, needed only by specific scripts (each script prints an install hint if missing):
+- `netmiko` - SSH to routers (`cube/` scripts)
+- `openpyxl` - Excel output (`cuc/build_call_trees.py`)
 
 Python 3.6+ required (f-strings used throughout).
 

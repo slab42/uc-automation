@@ -11,8 +11,8 @@ Compares Cisco router running configurations to a voice configuration template a
   - **Red**: Lines in template but missing from router config
   - **Blue**: Lines in router config but not in template
   - **Green**: Compliant sections
-- Batch processing via CSV or single router mode
-- Detailed logging to `logs/` directory
+- Single router or all-routers (from `_DATA/routers.csv`) modes
+- Detailed logging to the repo-root `_logs/` directory
 
 ## Prerequisites
 
@@ -29,7 +29,7 @@ Ensure SSH access to routers with appropriate credentials.
 
 1. Copy the example template:
    ```bash
-   cp router_config_template.EXAMPLE router_config_template.txt
+   cp _DATA/examples/router_config_template.EXAMPLE _DATA/router_config_template.txt
    ```
 
 2. Edit the template to include only the voice configuration sections you want to validate:
@@ -43,55 +43,67 @@ Ensure SSH access to routers with appropriate credentials.
 
    **Important**: Only sections present in the template will be checked. Extra sections in router configs are flagged but not required.
 
-### Setup Router List (CSV mode)
+### Setup Router List
 
 1. Copy the example CSV:
    ```bash
-   cp routers.csv.EXAMPLE routers.csv
+   cp _DATA/examples/routers.csv.EXAMPLE _DATA/routers.csv
    ```
 
-2. Edit `routers.csv` to include your routers:
+2. Edit `_DATA/routers.csv` to include your routers:
    ```csv
    router_ip,hostname
    192.168.1.10,router-01
    192.168.1.11,router-02
    ```
 
-   Fields: `router_ip`, `hostname` (order doesn't matter, names are flexible: ip/address, name/router_name also work)
+### Setup Credentials
+
+Add credentials to `.env/credentials.env`, using the standard CUBE flow
+shared by other scripts:
+
+```ini
+[CUBE:default]
+username=admin
+password=
+```
+
+or per-router entries matched by hostname:
+
+```ini
+[CUBE:router-01]
+username=admin
+password=
+```
 
 ### Run Script
 
 ```bash
-python3 compare_router_config.py
+python3 main.py
 ```
 
-#### Single Router Mode
+or directly:
 
-```
-Enter path to template config file: router_config_template.txt
-Single router or CSV mode? (s/c) [default: c]: s
-Enter router hostname: router-01
-Enter router IP address: 192.168.1.10
-Enter SSH username: admin
-Enter SSH password: ****
+```bash
+python3 cube/compare_router_config.py
 ```
 
-#### CSV Mode (default)
+You'll be prompted for:
+```
+Enter path to template config file [_DATA/router_config_template.txt]:
+2 routers found. Use multiple routers?  (Y/n):
+Use same credentials for all routers?  (Y/n):
+```
 
-```
-Enter path to template config file: router_config_template.txt
-Single router or CSV mode? (s/c) [default: c]: c
-Enter path to CSV file [default: routers.csv]: routers.csv
-Enter SSH username: admin
-Enter SSH password: ****
-```
+Answering "n" to "Use multiple routers?" selects a single router from the
+list (or lets you enter one manually if `_DATA/routers.csv` is empty).
 
 ## Output
 
-HTML reports are generated in the `reports/` directory with timestamp-based filenames:
+HTML reports are generated in `_DATA/reports/` with timestamp-based filenames:
 ```
-reports/2026-09-12_14-30-45-router-01_comparison.html
-reports/2026-09-12_14-30-58-router-02_comparison.html
+_DATA/reports/2026-09-12_14-30-45-router-01_comparison.html
+_DATA/reports/2026-09-12_14-30-58-router-02_comparison.html
 ```
 
 Each report shows:
@@ -103,9 +115,9 @@ Each report shows:
 
 ## Logging
 
-All operations logged to `logs/` directory:
+All operations logged to the repo-root `_logs/` directory:
 ```
-logs/2026-09-12_14-30-45-compare_router_config.log
+_logs/2026-09-12_14-30-45-compare-router-config.log
 ```
 
 Logs include:
@@ -135,12 +147,12 @@ Logs include:
 - Ensure SSH is enabled on router
 
 **Connection timeout**
-- Increase timeout (default 15s) - edit script or adjust network
+- Increase timeout (default 15s, set as a module constant in the script)
 - Check network connectivity to router
 - Verify router SSH port (default 22)
 
 **CSV parsing errors**
-- Ensure CSV has headers: `router_ip` (or `ip`, `address`) and `hostname` (or `name`, `router_name`)
+- Ensure CSV has headers: `router_ip` and `hostname`
 - Check for extra spaces or special characters in CSV
 - Verify file is plain text, not Excel format
 

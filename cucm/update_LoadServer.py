@@ -21,6 +21,9 @@ mac
 The CSV must contain either 'phone' (with SEP prefix) or 'mac' (12-digit MAC address)
 column. If 'mac' is provided without SEP prefix, the script will add it.
 
+CSV default: _DATA/phone.csv
+
+Logs: ../_logs/<timestamp>-update-load-server.log
 """
 
 from pathlib import Path
@@ -213,7 +216,7 @@ if __name__ == '__main__':
             if use_csv:
                 print('\nCSV Must have header row')
                 print('Column should be either "phone" (with SEP prefix) or "mac" (12-digit MAC address)')
-                csv_file = input('Enter CSV file name or full path: ') or 'phone.csv'
+                csv_file = input('Enter CSV file name or full path [_DATA/phone.csv]: ') or str(basepath.parent / '_DATA' / 'phone.csv')
                 operation_params = {'type': 'csv', 'csv_file': csv_file}
             else:
                 operation_params = {'type': 'single'}
@@ -236,7 +239,7 @@ if __name__ == '__main__':
             if input_type_csv:
                 print('\nCSV Must have header row')
                 print('Column should be either "phone" (with SEP prefix) or "mac" (12-digit MAC address)')
-                csv_file = input('Enter CSV file name or full path: ') or 'phone.csv'
+                csv_file = input('Enter CSV file name or full path [_DATA/phone.csv]: ') or str(basepath.parent / '_DATA' / 'phone.csv')
                 run_csv_file(axl, logger, csv_file)
             else:
                 run_single_phone(axl, logger)
@@ -258,7 +261,9 @@ if __name__ == '__main__':
         if input_type_csv:
             print('\nCSV Must have header row')
             print('Column should be either "phone" (with SEP prefix) or "mac" (12-digit MAC address)')
-            csv_file = input('Enter CSV file name or full path: ') or 'phone.csv'
+            csv_file = input('Enter CSV file name or full path [_DATA/phone.csv]: ') or str(basepath.parent / '_DATA' / 'phone.csv')
             run_csv_file(axl, logger, csv_file)
         else:
             run_single_phone(axl, logger)
+
+    logger.info("Update Load Server - Completed")

@@ -2,9 +2,9 @@
 # TITLE: Export Mailbox Usage
 
 """
-Export user mailbox usage from Cisco Unity Connection in CSV format.
+Export user mailbox usage from Cisco Unity Connection to CSV.
 
-Query users by extension and export mailbox size data in CSV format:
+Query users by extension (DtmfAccessId) and export mailbox size data:
 dtmfAccessID, alias, mailboxSize
 
 Usage:
@@ -13,6 +13,8 @@ Usage:
 The script is interactive and will prompt for:
     CUC Cluster: select from clusters.csv or provide manually
     Credentials: checks stored credentials in credentials.env
+    Use multiple clusters?: (y/n): choose 'y' to run against every CUC cluster
+        in clusters.csv, or 'n' (default) to pick a single cluster.
     Use CSV?: (y/n): choose 'y' to export mailbox usage for multiple users from a CSV file,
         or 'n' (default) to check a single user's mailbox.
 
@@ -20,12 +22,10 @@ The script is interactive and will prompt for:
         Extension: the extension number to look up
 
     If 'y' (CSV):
-        Enter CSV file name or full path: path to the CSV file
-            (default: mailboxes.csv)
-        Output file name (default: mailbox_usage_report.csv): path to output CSV file
+        Enter CSV file name or full path [_DATA/mailboxes.csv]: path to the CSV file
+        Output file name [_DATA/mailbox_usage_report.csv]: path to output CSV file
 
-CSV Input Format:
-extension
+CSV Input Format (extension):
 2001
 2002
 
@@ -34,6 +34,9 @@ dtmfAccessID,alias,mailboxSize
 2001,user1,123.45
 2002,user2,456.78
 
+Output: written to _DATA/mailbox_usage_report.csv by default. When run against multiple
+clusters, each cluster's output file is suffixed with "-<cluster_name>" before .csv.
+Logs: ../_logs/<timestamp>-check-user-mailbox-usage.log
 """
 
 from pathlib import Path
@@ -41,136 +44,66 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from csv import reader, writer
-import time
-import requests
 import urllib3
-from requests.auth import HTTPBasicAuth
 from datetime import datetime
-from lxml import etree
 from setup.logger import setup_logger
 from setup.prompt_utils import prompt_yes_no
-from setup.multi_object_loader import get_object_for_single_operation, load_credentials
-
-log_filename_prefix = 'check-userMailboxUsage-'
-
-
-def get_extension_field(version):
-    """
-    Determine which field to query based on CUC version.
-
-    Args:
-        version (string): CUC version (e.g., '15.0', '15.4')
-
-    Returns:
-        string: Field name to use for extension lookup
-    """
-    try:
-        version_float = float(version)
-        if version_float >= 15.4:
-            return 'DtmfAccessId'
-        else:
-            return 'DtmfAccessId'
-    except (ValueError, TypeError):
-        logger.warning(f'Could not parse version {version}, defaulting to DtmfAccessId')
-        return 'DtmfAccessId'
+from setup.multi_object_loader import (
+    get_object_for_single_operation,
+    load_credentials,
+    get_objects_for_multi_operation,
+    load_credentials_for_multi_objects
+)
+from cucAPI import CUC
 
 
-def get_user_mailbox_usage(http_session, cuc_server, extension, version):
+def get_user_mailbox_usage(cuc, logger, extension):
     """
     Query a user by extension and retrieve mailbox size.
 
     Args:
-        http_session: Requests session with auth configured
-        cuc_server (string): CUC server address
-        extension (string): Extension number to look up
-        version (string): CUC version to determine field to query
+        cuc (CUC): CUC API client
+        logger: logger instance
+        extension (string): Extension number (DtmfAccessId) to look up
 
     Returns:
-        dict: Result with keys 'success', 'dtmfAccessId', 'alias', 'mailboxSize', 'error'
+        dict: {'success', 'dtmfAccessId', 'alias', 'mailboxSize', 'error'}
     """
-    try:
-        base_url = f'https://{cuc_server}/vmrest'
-        extension_field = get_extension_field(version)
+    logger.info('Querying mailbox usage for DtmfAccessId: %s', extension)
 
-        logger.info(f'Querying mailbox usage for {extension_field}: {extension}')
+    result = cuc.get_user_mailbox_usage(extension)
+    if not result['success']:
+        logger.warning('%s: %s', extension, result['error'])
+        return {'success': False, 'dtmfAccessId': extension, 'alias': '', 'mailboxSize': '', 'error': result['error']}
 
-        users_url = f'{base_url}/users/'
-        users_response = http_session.get(users_url, verify=False)
-        users_response.raise_for_status()
-
-        root = etree.fromstring(users_response.content)
-        user_elements = root.findall('.//User')
-
-        matched_user = None
-        for user_elem in user_elements:
-            user_dict = {}
-            for child in user_elem:
-                user_dict[child.tag] = child.text
-
-            if user_dict.get(extension_field) == extension:
-                matched_user = user_dict
-                break
-
-        if not matched_user:
-            logger.warning(f'No user found with {extension_field}: {extension}')
-            return {'success': False, 'dtmfAccessId': extension, 'alias': '', 'mailboxSize': '', 'error': f'No user found'}
-
-        user_alias = matched_user.get('Alias', 'N/A')
-        user_dtmf = matched_user.get('DtmfAccessId', extension)
-        user_uri = matched_user.get('URI', '')
-
-        if not user_uri:
-            logger.error(f'No URI found for extension {extension}')
-            return {'success': False, 'dtmfAccessId': user_dtmf, 'alias': user_alias, 'mailboxSize': '', 'error': 'No URI found'}
-
-        mailbox_url = f'https://{cuc_server}{user_uri}/mailboxattributes'
-        mailbox_response = http_session.get(mailbox_url, verify=False)
-        mailbox_response.raise_for_status()
-
-        mailbox_root = etree.fromstring(mailbox_response.content)
-
-        mailbox = {}
-        if mailbox_root.tag == 'MailboxAttributes':
-            for child in mailbox_root:
-                mailbox[child.tag] = child.text
-        else:
-            mailbox_elem = mailbox_root.find('.//MailboxAttributes')
-            if mailbox_elem is not None:
-                for child in mailbox_elem:
-                    mailbox[child.tag] = child.text
-
-        current_size_bytes = int(mailbox.get('ByteSize', 0))
-        current_size_mb = round(current_size_bytes / (1024 * 1024), 2)
-
-        logger.info(f'Retrieved mailbox usage for {user_alias} ({user_dtmf}): {current_size_bytes} bytes, {current_size_mb} MB')
-        return {'success': True, 'dtmfAccessId': user_dtmf, 'alias': user_alias, 'mailboxSize': current_size_mb, 'error': ''}
-
-    except requests.exceptions.RequestException as e:
-        error_msg = f'API request failed: {str(e)}'
-        logger.error(error_msg)
-        return {'success': False, 'dtmfAccessId': extension, 'alias': '', 'mailboxSize': '', 'error': error_msg}
-    except (KeyError, ValueError) as e:
-        error_msg = f'Error parsing response: {str(e)}'
-        logger.error(error_msg)
-        return {'success': False, 'dtmfAccessId': extension, 'alias': '', 'mailboxSize': '', 'error': error_msg}
+    usage = result['response']
+    logger.info(
+        'Retrieved mailbox usage for %s (%s): %s bytes, %s MB',
+        usage['alias'], usage['dtmfAccessId'], usage['byteSize'], usage['sizeMb']
+    )
+    return {
+        'success': True,
+        'dtmfAccessId': usage['dtmfAccessId'],
+        'alias': usage['alias'],
+        'mailboxSize': usage['sizeMb'],
+        'error': ''
+    }
 
 
-def single_user():
+def run_single_user(cuc, logger):
     """Export mailbox usage for a single user by extension."""
     extension = input('Extension: ')
-    result = get_user_mailbox_usage(http_session, cuc_server, extension, version)
+    result = get_user_mailbox_usage(cuc, logger, extension)
     if result.get('success'):
         print(f"{result['dtmfAccessId']},{result['alias']},{result['mailboxSize']}")
     else:
-        logger.error(f"Error for extension {extension}: {result.get('error')}")
+        logger.error("Error for extension %s: %s", extension, result.get('error'))
 
 
-def use_csv():
+def run_csv_file(cuc, logger, input_file, output_file):
     """Export mailbox usage for multiple users from a CSV file."""
     print('\nCSV must have a header row and contain one extension per row')
     print('Field: extension')
-    input_file = input('Enter CSV file name or full path: ') or 'mailboxes.csv'
-    output_file = input('Output file name (default: mailbox_usage_report.csv): ') or 'mailbox_usage_report.csv'
 
     try:
         with open(input_file, 'r', encoding='utf8') as my_file:
@@ -184,39 +117,90 @@ def use_csv():
                     extension = row[0].strip()
                     if extension:
                         row_count += 1
-                        result = get_user_mailbox_usage(http_session, cuc_server, extension, version)
+                        result = get_user_mailbox_usage(cuc, logger, extension)
                         if result.get('success'):
                             output_rows.append([result['dtmfAccessId'], result['alias'], result['mailboxSize']])
                         else:
-                            logger.warning(f"Skipped extension {extension}: {result.get('error')}")
+                            logger.warning("Skipped extension %s: %s", extension, result.get('error'))
 
         with open(output_file, 'w', encoding='utf8', newline='') as out_file:
             csv_writer = writer(out_file)
             csv_writer.writerow(['dtmfAccessID', 'alias', 'mailboxSize'])
             csv_writer.writerows(output_rows)
 
-        logger.info(f'Processed {row_count} users from CSV')
-        logger.info(f'Exported {len(output_rows)} users to {output_file}')
+        logger.info('Processed %s users from CSV', row_count)
+        logger.info('Exported %s users to %s', len(output_rows), output_file)
         print(f'\nExported {len(output_rows)} users to {output_file}')
+        return row_count, len(output_rows)
 
     except FileNotFoundError:
-        logger.error(f'CSV file not found: {input_file}')
+        logger.error('CSV file not found: %s', input_file)
         print(f'Error: CSV file not found: {input_file}')
+        return 0, 0
     except IOError as e:
-        logger.error(f'Error writing to output file: {str(e)}')
+        logger.error('Error writing to output file: %s', str(e))
         print(f'Error writing to output file: {str(e)}')
+        return 0, 0
 
 
-def main():
-    """Menu to choose single user or CSV list."""
-    while True:
-        use_csv_mode = prompt_yes_no('Use CSV?', default=False)
-        if use_csv_mode:
-            use_csv()
-            break
+def run_operation_on_cluster(cluster_data, operation_params, cluster_credentials, logger, suffix=False):
+    """Run mailbox usage export on a single cluster."""
+    cluster_name = cluster_data.get('name', 'unknown')
+    server = cluster_data.get('server', 'unknown')
+    try:
+        cluster_name = cluster_data['name']
+        server = cluster_data['server']
+        version = cluster_data['version']
+
+        username, password = cluster_credentials[cluster_name]
+        cuc = CUC(username, password, server, version)
+
+        logger.info('=' * 60)
+        logger.info('Processing cluster: %s (%s)', cluster_name, server)
+        logger.info('=' * 60)
+
+        op_type = operation_params.get('type')
+        if op_type == 'csv':
+            output_file = operation_params['output_file']
+            if suffix:
+                base, dot, ext = output_file.rpartition('.')
+                output_file = f'{base}-{cluster_name}.{ext}' if dot else f'{output_file}-{cluster_name}'
+            run_csv_file(cuc, logger, operation_params['csv_file'], output_file)
+        else:  # single
+            run_single_user(cuc, logger)
+
+        logger.info('Completed cluster: %s', cluster_name)
+        print(f"✓ Completed {cluster_name} ({server})")
+        return True
+    except Exception as e:
+        logger.error("Exception on cluster %s: %s", cluster_name, str(e))
+        print(f"✗ Failed on {cluster_name}: {str(e)}")
+        return False
+
+
+def run_on_all_clusters(clusters_data, operation_params, logger):
+    """Run mailbox usage export on all clusters sequentially."""
+    print(f"\nProcessing {len(clusters_data)} clusters...\n")
+
+    print("=" * 80)
+    print("Loading Credentials")
+    print("=" * 80)
+    use_same = prompt_yes_no('Use same credentials for all clusters?', default=True)
+
+    cluster_credentials = load_credentials_for_multi_objects('CUC', clusters_data, use_same=use_same)
+
+    successful = 0
+    failed = 0
+
+    for cluster in clusters_data:
+        if run_operation_on_cluster(cluster, operation_params, cluster_credentials, logger, suffix=True):
+            successful += 1
         else:
-            single_user()
-            break
+            failed += 1
+
+    print(f"\n{'=' * 60}")
+    print(f"Completed: {successful} successful, {failed} failed")
+    print(f"{'=' * 60}")
 
 
 if __name__ == '__main__':
@@ -224,31 +208,63 @@ if __name__ == '__main__':
 
     basepath = Path.cwd()
 
-    # Load cluster information from clusters.csv or interactive input
-    cluster = get_object_for_single_operation(basepath, 'CUC', server_type='publisher')
-    if not cluster:
-        print("Error: Unable to load cluster information")
-        sys.exit(1)
-
-    # Load credentials from credentials.env
-    username, password = load_credentials('CUC', cluster['name'])
-
-    cuc_server = cluster['server']
-    version = cluster['version']
-
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    log_file = f"../_logs/{timestamp}-check-usermailboxusage-{cuc_server}.log"
+    log_file = f"../_logs/{timestamp}-check-user-mailbox-usage.log"
     logger = setup_logger(log_file)
     logger.info("Check User Mailbox Usage - Started")
 
-    logger.info(f'Starting check_userMailboxUsage for server: {cuc_server} (version: {version})')
-    extension_field = get_extension_field(version)
-    logger.info(f'Using field: {extension_field} for extension lookup')
+    default_csv = str(basepath.parent / '_DATA' / 'mailboxes.csv')
+    default_output = str(basepath.parent / '_DATA' / 'mailbox_usage_report.csv')
 
-    http_session = requests.Session()
-    http_session.auth = HTTPBasicAuth(username, password)
-    http_session.headers.update({'Content-Type': 'application/json'})
+    clusters_data = get_objects_for_multi_operation(basepath, 'CUC', server_type='publisher')
+    if clusters_data:
+        use_multiple = prompt_yes_no(f'{len(clusters_data)} clusters found. Use multiple clusters?', default=False)
+        if use_multiple:
+            use_csv_mode = prompt_yes_no('Use CSV?', default=False)
+            if use_csv_mode:
+                print('\nCSV must have a header row and contain one extension per row')
+                print('Field: extension')
+                csv_file = input('Enter CSV file name or full path [_DATA/mailboxes.csv]: ') or default_csv
+                output_file = input(f'Output file name [_DATA/mailbox_usage_report.csv]: ') or default_output
+                operation_params = {'type': 'csv', 'csv_file': csv_file, 'output_file': output_file}
+            else:
+                operation_params = {'type': 'single'}
+            run_on_all_clusters(clusters_data, operation_params, logger)
+        else:
+            cluster = get_object_for_single_operation(basepath, 'CUC', server_type='publisher')
+            if not cluster:
+                print("Error: Unable to load cluster information")
+                sys.exit(1)
 
-    main()
+            username, password = load_credentials('CUC', cluster['name'])
+            cuc = CUC(username, password, cluster['server'], cluster['version'])
 
-    logger.info('Script completed')
+            use_csv_mode = prompt_yes_no('Use CSV?', default=False)
+            if use_csv_mode:
+                print('\nCSV must have a header row and contain one extension per row')
+                print('Field: extension')
+                csv_file = input('Enter CSV file name or full path [_DATA/mailboxes.csv]: ') or default_csv
+                output_file = input(f'Output file name [_DATA/mailbox_usage_report.csv]: ') or default_output
+                run_csv_file(cuc, logger, csv_file, output_file)
+            else:
+                run_single_user(cuc, logger)
+    else:
+        cluster = get_object_for_single_operation(basepath, 'CUC', server_type='publisher')
+        if not cluster:
+            print("Error: Unable to load cluster information")
+            sys.exit(1)
+
+        username, password = load_credentials('CUC', cluster['name'])
+        cuc = CUC(username, password, cluster['server'], cluster['version'])
+
+        use_csv_mode = prompt_yes_no('Use CSV?', default=False)
+        if use_csv_mode:
+            print('\nCSV must have a header row and contain one extension per row')
+            print('Field: extension')
+            csv_file = input('Enter CSV file name or full path [_DATA/mailboxes.csv]: ') or default_csv
+            output_file = input(f'Output file name [_DATA/mailbox_usage_report.csv]: ') or default_output
+            run_csv_file(cuc, logger, csv_file, output_file)
+        else:
+            run_single_user(cuc, logger)
+
+    logger.info("Check User Mailbox Usage - Completed")

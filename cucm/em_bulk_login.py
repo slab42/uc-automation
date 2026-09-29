@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 # TITLE: EM Bulk Login
 
-import warnings
-warnings.simplefilter('ignore')
-
 """
 Extension Mobility (EM) Bulk Operations Script
 
@@ -38,6 +35,9 @@ Usage:
   CSV file location: _DATA/em_users.csv
   Logs output to: ../_logs/{timestamp}-em-bulk-login.log
 """
+
+import warnings
+warnings.simplefilter('ignore')
 
 from pathlib import Path
 import sys
@@ -476,3 +476,5 @@ if __name__ == '__main__':
 
     # Run main operation
     main(basepath, logger, mode, data, em_server=em_server, use_multiple_clusters=use_multiple_clusters, clusters_data=clusters_data)
+
+    logger.info("Extension Mobility Bulk Login/Logout/Check - Completed")

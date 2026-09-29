@@ -35,6 +35,7 @@ _SKIP_DIR_PARTS = {"__pycache__", "schema", "examples", ".git", "DEV"}
 _DENYLIST = {
     "cucm/ucmAPI.py",
     "cucm/general.py",
+    "cuc/cucAPI.py",
     "cucm/test_css_schema.py",
     "cucm/find_css_table.py",
     "setup/test_credentials_loader.py",

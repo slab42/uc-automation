@@ -4,14 +4,14 @@
 """
 Add Advertised Pattern individually or from a list in CSV
 
-CSV:
+CSV format (default: _DATA/advertisedPatterns.csv):
 description, pattern, patternType, hostedRoutePSTNRule, pstnFailStrip, pstnFailPrepend
 Test DIDs,+155585944XX,+E.164 Number,Use pattern,0,
 
 patternType: +E.164 Number, Enterprise Number
 hostedRoutePSTNRule: No PSTN, Use pattern, Specify
 
-
+Logs: ../_logs/<timestamp>-add-advertised-pattern.log
 """
 
 from pathlib import Path
@@ -154,7 +154,7 @@ if __name__ == '__main__':
             if use_csv:
                 print('\nCSV Must have header row and must contain only 1 pattern settings per row')
                 print('Field Order: description, pattern, patternType, hostedRoutePSTNRule, pstnFailStrip, pstnFailPrepend')
-                csv_file = input('Enter CSV file name or full path: ') or 'advertisedPatterns.csv'
+                csv_file = input('Enter CSV file name or full path [_DATA/advertisedPatterns.csv]: ') or str(basepath.parent / '_DATA' / 'advertisedPatterns.csv')
                 operation_params = {'type': 'csv', 'csv_file': csv_file}
             else:
                 operation_params = {'type': 'single'}
@@ -177,7 +177,7 @@ if __name__ == '__main__':
             if use_csv:
                 print('\nCSV Must have header row and must contain only 1 pattern settings per row')
                 print('Field Order: description, pattern, patternType, hostedRoutePSTNRule, pstnFailStrip, pstnFailPrepend')
-                csv_file = input('Enter CSV file name or full path: ') or 'advertisedPatterns.csv'
+                csv_file = input('Enter CSV file name or full path [_DATA/advertisedPatterns.csv]: ') or str(basepath.parent / '_DATA' / 'advertisedPatterns.csv')
                 run_csv_file(axl, logger, csv_file)
             else:
                 run_single_pattern(axl, logger)
@@ -199,7 +199,9 @@ if __name__ == '__main__':
         if use_csv:
             print('\nCSV Must have header row and must contain only 1 pattern settings per row')
             print('Field Order: description, pattern, patternType, hostedRoutePSTNRule, pstnFailStrip, pstnFailPrepend')
-            csv_file = input('Enter CSV file name or full path: ') or 'advertisedPatterns.csv'
+            csv_file = input('Enter CSV file name or full path [_DATA/advertisedPatterns.csv]: ') or str(basepath.parent / '_DATA' / 'advertisedPatterns.csv')
             run_csv_file(axl, logger, csv_file)
         else:
             run_single_pattern(axl, logger)
+
+    logger.info("Add Advertised Pattern - Completed")

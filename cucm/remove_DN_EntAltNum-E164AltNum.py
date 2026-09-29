@@ -18,6 +18,9 @@ columns are used. The routePartition column is optional. If it is missing
 from the CSV header, the routePartition variable below is used for every row
 instead.
 
+CSV default: _DATA/rm_dnAltNumbers.csv
+
+Logs: ../_logs/<timestamp>-remove-dn-entaltnum-e164altnum.log
 """
 
 from pathlib import Path
@@ -180,7 +183,7 @@ if __name__ == '__main__':
             if use_csv:
                 print('\nCSV Must have header row. Required columns: pattern (routePartition optional)')
                 print('Additional columns are allowed and will be ignored')
-                csv_file = input('Enter CSV file name or full path (default filename: rm_dnAltNumbers.csv): ') or 'rm_dnAltNumbers.csv'
+                csv_file = input('Enter CSV file name or full path [_DATA/rm_dnAltNumbers.csv]: ') or str(basepath.parent / '_DATA' / 'rm_dnAltNumbers.csv')
                 operation_params = {'type': 'csv', 'csv_file': csv_file}
             else:
                 operation_params = {'type': 'single'}
@@ -203,7 +206,7 @@ if __name__ == '__main__':
             if input_type_csv:
                 print('\nCSV Must have header row. Required columns: pattern (routePartition optional)')
                 print('Additional columns are allowed and will be ignored')
-                csv_file = input('Enter CSV file name or full path (default filename: rm_dnAltNumbers.csv): ') or 'rm_dnAltNumbers.csv'
+                csv_file = input('Enter CSV file name or full path [_DATA/rm_dnAltNumbers.csv]: ') or str(basepath.parent / '_DATA' / 'rm_dnAltNumbers.csv')
                 run_csv_file(axl, logger, csv_file)
             else:
                 run_single_alt_num_line(axl, logger)
@@ -225,7 +228,9 @@ if __name__ == '__main__':
         if input_type_csv:
             print('\nCSV Must have header row. Required columns: pattern (routePartition optional)')
             print('Additional columns are allowed and will be ignored')
-            csv_file = input('Enter CSV file name or full path (default filename: rm_dnAltNumbers.csv): ') or 'rm_dnAltNumbers.csv'
+            csv_file = input('Enter CSV file name or full path [_DATA/rm_dnAltNumbers.csv]: ') or str(basepath.parent / '_DATA' / 'rm_dnAltNumbers.csv')
             run_csv_file(axl, logger, csv_file)
         else:
             run_single_alt_num_line(axl, logger)
+
+    logger.info("Remove Dn Entaltnum E164altnum - Completed")

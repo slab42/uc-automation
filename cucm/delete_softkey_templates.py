@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 # TITLE: Delete Softkey Templates
 
-import warnings
-warnings.simplefilter('ignore')
-
 """
 Delete Softkey Templates from CSV
 Reads the output CSV from list_softkey_templates.py and deletes the templates
@@ -12,6 +9,9 @@ Only deletes templates with no dependencies (pre-validated by list_softkey_templ
 Input CSV format (from list_softkey_templates.py output):
   cluster,name,uuid
 """
+
+import warnings
+warnings.simplefilter('ignore')
 
 from pathlib import Path
 import sys
@@ -159,7 +159,7 @@ if __name__ == '__main__':
 
     # Setup Logging
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    log_file = f"_logs/{timestamp}-delete-softkey-templates.log"
+    log_file = f"../_logs/{timestamp}-delete-softkey-templates.log"
     logger = setup_logger(log_file)
     logger.info("Delete Softkey Templates - Started")
 

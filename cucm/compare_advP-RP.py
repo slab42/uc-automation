@@ -151,7 +151,7 @@ def run_comparison(axl, logger, cluster_name, server):
     mismatches = compare_patterns(advertised_patterns, route_patterns)
 
     if mismatches or len(advertised_patterns) > 0 or len(route_patterns) > 0:
-        export_comparison_to_csv(mismatches, len(advertised_patterns), len(route_patterns), server)
+        export_comparison_to_csv(logger, mismatches, len(advertised_patterns), len(route_patterns), server)
     else:
         logger.warning('No patterns to compare')
         print('No patterns to compare')
@@ -159,11 +159,12 @@ def run_comparison(axl, logger, cluster_name, server):
     return True
 
 
-def export_comparison_to_csv(mismatches, adv_count, route_count, server=''):
+def export_comparison_to_csv(logger, mismatches, adv_count, route_count, server=''):
     """
     Export comparison results to a CSV file with timestamp
 
     Args:
+        logger: logger instance
         mismatches (list): List of mismatch dictionaries
         adv_count (int): Total advertised patterns count
         route_count (int): Total route patterns count
@@ -311,3 +312,5 @@ if __name__ == '__main__':
         axl = AXL(username=username, password=password, wsdl=wsdl, cucm=server, cucm_version=version)
 
         run_comparison(axl, logger, cluster['name'], server)
+
+    logger.info("Compare Advertised Patterns with Route Patterns - Completed")

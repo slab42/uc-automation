@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 # TITLE: Remediate Softkey Templates
 
-import warnings
-warnings.simplefilter('ignore')
-
 """
 Remediate Softkey Templates - List and Delete Without Dependencies
 Lists custom softkey templates and their dependencies, then optionally deletes templates with no dependencies
@@ -14,6 +11,9 @@ Supports single or multiple CUCM clusters
 Arguments:
   --debug   Enable debug-level console logging (default: info level)
 """
+
+import warnings
+warnings.simplefilter('ignore')
 
 from pathlib import Path
 import sys
@@ -268,7 +268,7 @@ if __name__ == '__main__':
 
     # Setup Logging
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    log_file = f"_logs/{timestamp}-remediate-softkey-templates.log"
+    log_file = f"../_logs/{timestamp}-remediate-softkey-templates.log"
     logger = setup_logger(log_file, debug=args.debug)
     logger.info("Remediate Softkey Templates - Started")
 

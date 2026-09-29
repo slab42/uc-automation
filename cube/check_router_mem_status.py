@@ -1,52 +1,72 @@
 #!/usr/bin/env python3
 # TITLE: Router Memory Status
+
 """
 Cisco Router Platform Software Status Checker
 
-Connects to multiple Cisco routers via SSH and executes:
+Connects to one or more Cisco routers via SSH and executes:
   show platform software status control-processor br
 
-Customer Variables - Imported from ../.var/check_router_mem_status.var
+Usage:
+    python3 check_router_mem_status.py [-d]
+
+    -d, --default: Non-interactive mode for scheduled runs. Uses all routers
+        from _DATA/routers.csv, [CUBE:default] credentials from credentials.env
+        (falls back to a password prompt if none is stored), skips the
+        customer variable validation prompt, and sends the summary email
+        without asking.
+
+The script is interactive and will prompt for:
+    CUBE Router(s): select from routers.csv or provide manually
+    Use multiple routers?: (Y/n): use all routers found in routers.csv,
+        or select a single router
+    Credentials: checks stored credentials in credentials.env
+    Use same credentials for all routers?: (Y/n) (multi-router mode only)
+    Send summary email?: (Y/n)
+
+Customer Variables - Imported from .var/check_router_mem_status.var
   low_memory_threshold - Free memory percentage threshold for alerts (default: 33)
 
-Router list from CSV file (required):
+Router list from CSV file (_DATA/routers.csv):
   router_ip,hostname
   192.168.1.1,router-01
   192.168.1.2,router-02
 
-Credentials from:
-  - Interactive prompt (enter username/password at runtime)
-  - credentials.env file:
+Credentials from .env/credentials.env:
     [CUBE:default] - Single credential set for all routers
-    [CUBE:hostname] - Per-router credentials matched by hostname
+    [CUBE:<hostname>] - Per-router credentials matched by hostname
 
 See .env.EXAMPLE/CREDENTIALS_ENV_README.md for credentials.env setup.
+
+Output: Summary printed to console; optional email sent via customer_env.json
+    email settings.
+Logs: ../_logs/<timestamp>-check-router-mem-status.log
 """
+
+from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import warnings
 warnings.filterwarnings('ignore')
 
 import argparse
-import csv
 import getpass
-import sys
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from pathlib import Path
 from datetime import datetime
 
-# SSH connection settings
-SSH_DEVICE_TYPE = 'cisco_ios'
-SSH_PORT = 22
-SSH_TIMEOUT = 15
-
-# Add parent directory to path to import from setup
-sys.path.insert(0, str(Path(__file__).parent.parent))
 from setup.logger import setup_logger
 from setup.prompt_utils import prompt_yes_no
 from setup.env_loader import EnvironmentConfig, CredentialsLoader
 from setup.var_loader import load_customer_variables
+from setup.multi_object_loader import (
+    get_object_for_single_operation,
+    load_credentials,
+    get_objects_for_multi_operation,
+    load_credentials_for_multi_objects
+)
 
 try:
     from netmiko import ConnectHandler
@@ -54,6 +74,34 @@ try:
 except ImportError:
     print("ERROR: netmiko not installed. Install with: pip install netmiko")
     sys.exit(1)
+
+# SSH connection settings
+SSH_DEVICE_TYPE = 'cisco_ios'
+SSH_PORT = 22
+SSH_TIMEOUT = 15
+
+
+def build_device(router, username, password):
+    """Build a netmiko device dict from a router dict and credentials.
+
+    Args:
+        router (dict): Router dict with 'name' (hostname) and 'ip' keys.
+        username (str): SSH username.
+        password (str): SSH password.
+
+    Returns:
+        dict: netmiko connection params plus 'ip'/'hostname' for display.
+    """
+    return {
+        'device_type': SSH_DEVICE_TYPE,
+        'host': router['ip'],
+        'username': username,
+        'password': password,
+        'port': SSH_PORT,
+        'timeout': SSH_TIMEOUT,
+        'ip': router['ip'],
+        'hostname': router['name']
+    }
 
 
 def extract_memory_section(output):
@@ -97,38 +145,6 @@ def extract_free_percentage(output):
     return 0
 
 
-def read_csv_routers(csv_path):
-    """Read router list from CSV file. Searches for router_ip and hostname columns."""
-    routers = []
-    try:
-        with open(csv_path, 'r') as f:
-            reader = csv.DictReader(f)
-            if not reader.fieldnames:
-                print("ERROR: CSV file is empty")
-                return None
-
-            ip_col = next((h for h in reader.fieldnames if h.lower() in ['router_ip', 'ip', 'address']), None)
-            host_col = next((h for h in reader.fieldnames if h.lower() in ['hostname', 'name', 'router_name']), None)
-
-            if not ip_col or not host_col:
-                print(f"ERROR: CSV must contain 'router_ip' and 'hostname' columns. Found: {reader.fieldnames}")
-                return None
-
-            for row in reader:
-                routers.append({
-                    'ip': row[ip_col].strip(),
-                    'hostname': row[host_col].strip()
-                })
-
-        return routers if routers else None
-    except FileNotFoundError:
-        print(f"ERROR: File not found: {csv_path}")
-        return None
-    except Exception as e:
-        print(f"ERROR: Failed to read CSV: {e}")
-        return None
-
-
 def send_summary_email(results, timestamp, logger, email_cfg, low_memory_threshold):
     """Send a summary email with router check results."""
     try:
@@ -140,7 +156,7 @@ def send_summary_email(results, timestamp, logger, email_cfg, low_memory_thresho
 
         for result in results:
             status = "✓ SUCCESS" if result['success'] else "✗ FAILED"
-            highlight = " ⚠️ LOW FREE MEMORY" if result['success'] and result['free_pct'] < low_memory_threshold else ""
+            highlight = " ⚠ LOW FREE MEMORY" if result['success'] and result['free_pct'] < low_memory_threshold else ""
             body += f"{status} - {result['hostname']} ({result['ip']}){highlight}\n"
             if result['success']:
                 body += f"  Memory Info: {result['memory']}\n"
@@ -201,161 +217,16 @@ def check_router_status(device_config, logger):
         return {'success': False, 'output': ''}
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Check Cisco router memory status')
-    parser.add_argument('-d', '--default', action='store_true', help='Accept defaults for all prompts without user interaction')
-    args = parser.parse_args()
+def run_checks(devices, logger):
+    """Run the memory status check on each device and collect results.
 
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    log_file = f"../_logs/{timestamp}-check_router_status.log"
-    logger = setup_logger(log_file)
+    Args:
+        devices (list): List of netmiko device dicts (from build_device).
+        logger: logger instance.
 
-    # Load customer variables from .var file
-    customer_vars = load_customer_variables(__file__, logger, skip_prompts=args.default)
-    low_memory_threshold = int(customer_vars.get('low_memory_threshold', 10)) if customer_vars else 10
-
-    env_config = EnvironmentConfig()
-    email_cfg = env_config.get_email_config()
-
-    logger.info("Router Status Check - Started")
-
-    # Step 1: Read router list from CSV
-    print("\n" + "="*80)
-    if args.default:
-        csv_input = "../_DATA/routers.csv"
-        logger.info("Using default CSV path (--default flag set)")
-    else:
-        csv_input = input("Enter path to CSV file [_DATA/routers.csv]: ").strip()
-        if not csv_input:
-            csv_input = "../_DATA/routers.csv"
-
-    routers = read_csv_routers(csv_input)
-    if not routers:
-        logger.error("No routers found in CSV file")
-        return
-
-    logger.info(f"Found {len(routers)} router(s) to check")
-    print(f"\nFound {len(routers)} router(s):")
-    for r in routers:
-        print(f"  - {r['hostname']} ({r['ip']})")
-
-    # Step 2: Choose credential mode
-    print("\n" + "="*80)
-    print("Credential Mode")
-    print("="*80)
-    print("1. Single username/password for all routers")
-    print("2. Per-router credentials (matched by hostname in credentials.env)")
-    if args.default:
-        cred_mode = "1"
-        print("\nUsing default mode: 1 (single username/password)")
-        logger.info("Using default credential mode (--default flag set)")
-    else:
-        cred_mode = input("\nSelect mode (1 or 2) [default: 1]: ").strip() or "1"
-
-    devices = []
-    creds_loader = CredentialsLoader()
-
-    if cred_mode == "2":
-        # Per-router credentials mode
-        logger.info("Using per-router credentials from credentials.env")
-        cube_creds = creds_loader.get_cube_credentials()
-
-        if not cube_creds:
-            logger.warning("No credentials found in credentials.env, falling back to prompt")
-            print("\nWARNING: No credentials found in credentials.env")
-            print("Falling back to interactive prompt...")
-            username = input("Enter SSH username: ").strip()
-            password = getpass.getpass("Enter SSH password: ")
-            for router in routers:
-                devices.append({
-                    'device_type': SSH_DEVICE_TYPE,
-                    'host': router['ip'],
-                    'username': username,
-                    'password': password,
-                    'port': SSH_PORT,
-                    'timeout': SSH_TIMEOUT,
-                    'ip': router['ip'],
-                    'hostname': router['hostname']
-                })
-        else:
-            # Build credential map by hostname
-            cred_map = {cred['identifier']: cred for cred in cube_creds}
-
-            print(f"\nFound {len(cube_creds)} credential entries in credentials.env")
-
-            for router in routers:
-                # Try to find matching credentials by hostname
-                creds = cred_map.get(router['hostname'])
-
-                if creds:
-                    username = creds['username']
-                    password = creds['password']
-                    logger.info(f"Found credentials for {router['hostname']} in credentials.env")
-                    print(f"  ✓ {router['hostname']}: using credentials from credentials.env")
-                else:
-                    logger.warning(f"No credentials found for {router['hostname']}, will prompt")
-                    print(f"  ⚠ {router['hostname']}: no entry in credentials.env, will prompt at connect")
-                    username = input(f"    Username for {router['hostname']}: ").strip()
-                    password = getpass.getpass(f"    Password for {router['hostname']}: ")
-
-                devices.append({
-                    'device_type': SSH_DEVICE_TYPE,
-                    'host': router['ip'],
-                    'username': username,
-                    'password': password,
-                    'port': SSH_PORT,
-                    'timeout': SSH_TIMEOUT,
-                    'ip': router['ip'],
-                    'hostname': router['hostname']
-                })
-    else:
-        # Single credential mode
-        logger.info("Using single username/password for all routers")
-
-        # Try to load from [CUBE:default] in credentials.env
-        default_creds = creds_loader.get_cube_credentials('default')
-
-        if default_creds and default_creds['username']:
-            print("\nFound default credentials in credentials.env")
-            if args.default:
-                use_stored = True
-                print("Using stored credentials (--default flag set)")
-                logger.info("Using stored credentials (--default flag set)")
-            else:
-                use_stored = prompt_yes_no("Use stored credentials?", default=True)
-
-            if use_stored:
-                username = default_creds['username']
-                password = default_creds['password']
-                if not password:
-                    password = getpass.getpass("Enter SSH password: ")
-                logger.info("Using stored username from credentials.env")
-            else:
-                username = input("Enter SSH username: ").strip()
-                password = getpass.getpass("Enter SSH password: ")
-        else:
-            # No stored credentials, prompt user
-            print("\nNo default credentials found in credentials.env")
-            username = input("Enter SSH username: ").strip()
-            password = getpass.getpass("Enter SSH password: ")
-
-        # Apply same credentials to all routers
-        for router in routers:
-            devices.append({
-                'device_type': SSH_DEVICE_TYPE,
-                'host': router['ip'],
-                'username': username,
-                'password': password,
-                'port': SSH_PORT,
-                'timeout': SSH_TIMEOUT,
-                'ip': router['ip'],
-                'hostname': router['hostname']
-            })
-
-    print("\n" + "="*80)
-    print("Executing commands...")
-    print("="*80)
-
+    Returns:
+        list: Result dicts with hostname, ip, success, memory, free_pct.
+    """
     results = []
     for i, device_config in enumerate(devices, 1):
         logger.info(f"Processing router {i}/{len(devices)}: {device_config['hostname']}")
@@ -369,7 +240,11 @@ def main():
             'memory': memory_section,
             'free_pct': free_pct
         })
+    return results
 
+
+def print_summary(results, low_memory_threshold):
+    """Print a console summary of results, highlighting low-memory routers."""
     print("\n" + "="*80)
     print("Summary")
     print("="*80)
@@ -380,7 +255,7 @@ def main():
     normal_memory = [r for r in results if not (r['success'] and r['free_pct'] < low_memory_threshold)]
 
     for result in low_memory:
-        print(f"✓ {result['hostname']} ({result['ip']}) ⚠️ LOW FREE MEMORY")
+        print(f"✓ {result['hostname']} ({result['ip']}) ⚠ LOW FREE MEMORY")
         print(f"  {result['memory']}")
         print()
 
@@ -391,14 +266,90 @@ def main():
             print(f"  {result['memory']}")
         print()
 
-    logger.info(f"Router Status Check - Completed ({successful}/{len(results)} successful)")
+    return successful
+
+
+def main():
+    """Entry point: load routers/credentials, run memory checks, report/email results."""
+    parser = argparse.ArgumentParser(description='Check Cisco router memory status')
+    parser.add_argument('-d', '--default', action='store_true', help='Accept defaults for all prompts without user interaction')
+    args = parser.parse_args()
+
+    basepath = Path.cwd()
+
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    log_file = f"../_logs/{timestamp}-check-router-mem-status.log"
+    logger = setup_logger(log_file)
+    logger.info("Router Memory Status - Started")
+
+    # Load customer variables from .var file
+    customer_vars = load_customer_variables(__file__, logger, skip_prompts=args.default)
+    low_memory_threshold = int(customer_vars.get('low_memory_threshold', 33)) if customer_vars else 33
+
+    env_config = EnvironmentConfig()
+    email_cfg = env_config.get_email_config()
+
+    devices = []
+
+    if args.default:
+        logger.info("Default mode: using all routers from routers.csv")
+        routers = get_objects_for_multi_operation(basepath, 'CUBE')
+        if not routers:
+            logger.error("No routers found in _DATA/routers.csv")
+            print("ERROR: No routers found in _DATA/routers.csv")
+            return
+
+        creds_loader = CredentialsLoader()
+        default_creds = creds_loader.get_cube_credentials('default')
+        if default_creds and default_creds.get('username'):
+            username = default_creds['username']
+            password = default_creds.get('password', '')
+            if not password:
+                logger.warning("No stored password for [CUBE:default]; prompting (no other option in --default mode)")
+                password = getpass.getpass("Enter SSH password: ")
+        else:
+            logger.warning("No [CUBE:default] credentials found; prompting (no other option in --default mode)")
+            username = input("Enter SSH username: ").strip()
+            password = getpass.getpass("Enter SSH password: ")
+
+        for router in routers:
+            devices.append(build_device(router, username, password))
+    else:
+        routers = get_objects_for_multi_operation(basepath, 'CUBE')
+        if routers:
+            use_multiple = prompt_yes_no(f'{len(routers)} routers found. Use multiple routers?', default=True)
+        else:
+            use_multiple = False
+
+        if use_multiple:
+            use_same = prompt_yes_no('Use same credentials for all routers?', default=True)
+            router_credentials = load_credentials_for_multi_objects('CUBE', routers, use_same=use_same)
+            for router in routers:
+                username, password = router_credentials[router['name']]
+                devices.append(build_device(router, username, password))
+        else:
+            router = get_object_for_single_operation(basepath, 'CUBE')
+            if not router:
+                print("Error: Unable to load router information")
+                sys.exit(1)
+            username, password = load_credentials('CUBE', router['name'])
+            devices.append(build_device(router, username, password))
 
     print("\n" + "="*80)
+    print("Executing commands...")
+    print("="*80)
+
+    results = run_checks(devices, logger)
+    successful = print_summary(results, low_memory_threshold)
+
+    logger.info(f"Router Memory Status - Completed ({successful}/{len(results)} successful)")
+
     if args.default:
         send_email = True
         print("Sending summary email (--default flag set)")
         logger.info("Sending summary email (--default flag set)")
     else:
+        print("\n" + "="*80)
         send_email = prompt_yes_no("Send summary email?", default=True)
 
     if send_email:

@@ -25,7 +25,7 @@ The script is interactive and will prompt for:
 
     If 'y' (CSV):
         Enter CSV file name or full path: path to the CSV file
-            (default: mv_dnPartitions.csv)
+            (default: _DATA/mv_dnPartitions.csv)
 
 Before moving, the script verifies the DN exists in the current partition.
 If it does not, the move is skipped and logged as an error.
@@ -33,6 +33,7 @@ If it does not, the move is skipped and logged as an error.
 CSV format (pattern, routePartition, newRoutePartition):
 3120, Phone-Line1-PT, Phone-Line2-PT
 
+Logs: ../_logs/<timestamp>-move-dn-partition.log
 """
 
 from pathlib import Path
@@ -199,7 +200,7 @@ if __name__ == '__main__':
             if use_csv:
                 print('\nCSV Must have header row and must contain only 1 DN per row')
                 print('Field Order: pattern, routePartition, newRoutePartition')
-                csv_file = input('Enter CSV file name or full path: ') or 'mv_dnPartitions.csv'
+                csv_file = input('Enter CSV file name or full path [_DATA/mv_dnPartitions.csv]: ') or str(basepath.parent / '_DATA' / 'mv_dnPartitions.csv')
                 operation_params = {'type': 'csv', 'csv_file': csv_file, 'reverse': args.reverse}
             else:
                 operation_params = {'type': 'single', 'reverse': args.reverse}
@@ -222,7 +223,7 @@ if __name__ == '__main__':
             if use_csv:
                 print('\nCSV Must have header row and must contain only 1 DN per row')
                 print('Field Order: pattern, routePartition, newRoutePartition')
-                csv_file = input('Enter CSV file name or full path: ') or 'mv_dnPartitions.csv'
+                csv_file = input('Enter CSV file name or full path [_DATA/mv_dnPartitions.csv]: ') or str(basepath.parent / '_DATA' / 'mv_dnPartitions.csv')
                 run_csv_file(axl, logger, csv_file, reverse=args.reverse)
             else:
                 run_single_dn(axl, logger, reverse=args.reverse)
@@ -244,7 +245,9 @@ if __name__ == '__main__':
         if use_csv:
             print('\nCSV Must have header row and must contain only 1 DN per row')
             print('Field Order: pattern, routePartition, newRoutePartition')
-            csv_file = input('Enter CSV file name or full path: ') or 'mv_dnPartitions.csv'
+            csv_file = input('Enter CSV file name or full path [_DATA/mv_dnPartitions.csv]: ') or str(basepath.parent / '_DATA' / 'mv_dnPartitions.csv')
             run_csv_file(axl, logger, csv_file, reverse=args.reverse)
         else:
             run_single_dn(axl, logger, reverse=args.reverse)
+
+    logger.info("Move Dn Partition - Completed")

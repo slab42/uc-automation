@@ -9,12 +9,20 @@ Supports: IP Phone, Analog Device, CTI Port, CTI Route Point, Device Profile, Tr
 
 Usage:
   python3 cucm/lookup_device_type.py
+
+The script is interactive and will prompt for:
+    CUCM Cluster: select from clusters.csv or provide manually
+    Credentials: checks stored credentials in credentials.env
+    Enter device name to lookup: name of the device to identify
+
+Logs: ../_logs/<timestamp>-lookup-device-type.log
 """
 
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from datetime import datetime
 from setup.multi_object_loader import get_object_for_single_operation, load_credentials
 from setup.logger import setup_logger
 from cucm.ucmAPI import AXL
@@ -262,7 +270,10 @@ def lookup_device_type(cluster, device_name, basepath, logger, axl_connection=No
 
 def main():
     basepath = Path(__file__).parent
-    logger = setup_logger('./cucm/lookup_device_type.py', './logs')
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    log_file = f"../_logs/{timestamp}-lookup-device-type.log"
+    logger = setup_logger(log_file)
+    logger.info("Lookup Device Type - Started")
 
     logger.info("=" * 60)
     logger.info("CUCM Device Type Lookup")
@@ -308,6 +319,8 @@ def main():
         print(f"Device '{device_name}' not found")
         logger.warning(f"Device not found: {device_name}")
     print("=" * 60)
+
+    logger.info("Lookup Device Type - Completed")
 
 if __name__ == '__main__':
     main()

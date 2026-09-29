@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 # TITLE: Clean Phone Button Templates
 
-import warnings
-warnings.simplefilter('ignore')
-
 """
 Clean up unused phone button templates matching a search text
 
@@ -26,6 +23,9 @@ Default behavior (no flags):
   - If yes: deletes with confirmation for each template
   - If no: exits without deletion
 """
+
+import warnings
+warnings.simplefilter('ignore')
 
 from pathlib import Path
 import sys

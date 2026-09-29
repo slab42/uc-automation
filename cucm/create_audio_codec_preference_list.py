@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 # TITLE: Create Codec Preference List
 
-import warnings
-warnings.simplefilter('ignore')
-
 """
 Create Audio Codec Preference List individually or from a list in CSV
 Supports single or multiple CUCM clusters
@@ -20,6 +17,9 @@ Common codecs: G.711-ulaw, G.711-alaw, G.729, G.723, G.722, G.722.1, iLBC, Opus
 
 For multiple clusters, create a clusters.csv file with cluster configurations.
 """
+
+import warnings
+warnings.simplefilter('ignore')
 
 from pathlib import Path
 import sys
@@ -228,3 +228,5 @@ if __name__ == '__main__':
             interactive_csv_mode(axl, logger)
         else:
             interactive_single_mode(axl, logger)
+
+    logger.info("Create Audio Codec Preference List - Completed")

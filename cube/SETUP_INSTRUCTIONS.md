@@ -1,38 +1,35 @@
 # check_router_mem_status.py Setup Instructions
 
-The `check_router_mem_status.py` script now uses credentials.env for credential management while reading router IPs and names from routers.csv.
+The `check_router_mem_status.py` script uses the shared UC automation router
+selector and credentials.env for credential management. Routers are read
+from `_DATA/routers.csv`.
 
 ## How It Works
 
-1. Router list: Read from routers.csv (IP + hostname)
-2. Credentials: From credentials.env (username + password)
-3. Two credential modes: Single or per-router credentials
+1. Router list: read from `_DATA/routers.csv` via the shared router selector
+2. Credentials: from `.env/credentials.env`, using the standard
+   `[CUBE:default]` / `[CUBE:<hostname>]` flow shared by all CUBE scripts
+3. Run with `python3 main.py` (menu entry: "Router Memory Status") or
+   directly with `python3 cube/check_router_mem_status.py`
 
 ## Setup Steps
 
 ### Step 1: Create/Update routers.csv
 
-The routers.csv file is located in the central **_DATA** folder.
-
 Location: `_DATA/routers.csv`
 
-CSV format (headers are searched by name):
+CSV format:
 ```csv
 router_ip,hostname
 192.168.20.2,aawoods-vg-8000v
 192.168.20.5,aw-slab42-lg
 ```
 
-Keys searched: `router_ip`, `ip`, `address` (for IP)
-Keys searched: `hostname`, `name`, `router_name` (for hostname)
-
-Note: Edit `_DATA/routers.csv`, not the old `cube/routers.csv` location.
+An example is provided at `_DATA/examples/routers.csv.EXAMPLE`.
 
 ### Step 2: Add Credentials to credentials.env
 
-Choose credential mode:
-
-**Option A: Single credential set (simpler)**
+**Option A: Single credential set for all routers**
 
 ```ini
 [CUBE:default]
@@ -40,9 +37,9 @@ username=admin
 password=
 ```
 
-**Option B: Per-router credentials (more flexibility)**
+**Option B: Per-router credentials**
 
-Match section names to router hostnames from CSV:
+Match section names to router hostnames from the CSV:
 
 ```ini
 [CUBE:aawoods-vg-8000v]
@@ -57,74 +54,39 @@ password=
 ### Step 3: Run the script
 
 ```bash
+python3 main.py
+```
+
+or directly:
+
+```bash
 python3 cube/check_router_mem_status.py
 ```
 
 You'll be prompted for:
-1. **CSV file path** - Press Enter for default (routers.csv)
-2. **Credential mode** - Choose 1 or 2:
-   ```
-   Credential Mode
-   ================================================================================
-   1. Single username/password for all routers
-   2. Per-router credentials (matched by hostname in credentials.env)
-   
-   Select mode (1 or 2) [default: 1]: _
-   ```
+1. **Use multiple routers?** - Yes to run against every router in
+   routers.csv, No to pick a single router from the list
+2. **Credentials** - if multiple routers, "Use same credentials for all
+   routers?"; the loader checks `[CUBE:<hostname>]` first, then
+   `[CUBE:default]`, then prompts
+3. **Send summary email?** - Yes to email the results using the
+   `customer_env.json` email settings
 
-### Step 4: Provide credentials (if needed)
+### Step 4: Scheduled / non-interactive runs
 
-- **Mode 1**: Uses `[CUBE:default]` if present, otherwise prompts
-- **Mode 2**: Uses matching hostname entries, prompts for missing ones
+Use the `-d` / `--default` flag for cron or scheduled runs:
 
-### Step 5: Review results and send email
-
-Results are displayed, then optionally send summary email.
-
-## Credential Mode Details
-
-### Mode 1: Single Username/Password
-
-Best for: All routers use same credentials
-
-Flow:
-1. Script checks for `[CUBE:default]` in credentials.env
-2. If found and has username, offers to use it
-3. Can accept stored credentials or enter new ones
-4. Same credentials applied to all routers
-
-Example:
-```ini
-[CUBE:default]
-username=admin
-password=
+```bash
+python3 cube/check_router_mem_status.py --default
 ```
 
-Run: `python3 cube/check_router_mem_status.py` → Select 1 → Choose to use stored or enter new
-
-### Mode 2: Per-Router Credentials
-
-Best for: Different routers have different credentials
-
-Flow:
-1. Script reads CSV routers
-2. For each router, looks for matching `[CUBE:hostname]` entry
-3. If found, uses stored credentials
-4. If not found, prompts user
-5. Each router can have different username/password
-
-Example:
-```ini
-[CUBE:aawoods-vg-8000v]
-username=admin
-password=
-
-[CUBE:aw-slab42-lg]
-username=user2
-password=
-```
-
-Run: `python3 cube/check_router_mem_status.py` → Select 2 → Credentials loaded from entries or prompted
+In `--default` mode the script:
+- Uses every router in `_DATA/routers.csv`
+- Uses `[CUBE:default]` credentials without prompting (falls back to a
+  password prompt only if no password is stored, since there is no other
+  source of credentials in this mode)
+- Skips the customer variable confirmation prompt
+- Sends the summary email automatically
 
 ## Password Handling
 
@@ -144,111 +106,62 @@ password=my_router_password
 ```
 Script uses stored password without prompting. Not recommended for production.
 
-## Credential Mode Comparison
+## Customer Variables
 
-| Aspect | Mode 1 (Single) | Mode 2 (Per-Router) |
-|--------|-----------------|-------------------|
-| Setup complexity | Simple | Medium |
-| All routers same creds | ✓ Best choice | Works but overkill |
-| Different creds per router | ✗ Not possible | ✓ Best choice |
-| Recommended for | Uniform environments | Mixed environments |
-| Entries needed | 1 (`[CUBE:default]`) | One per unique router |
+`low_memory_threshold` (default 33) is stored in `.var/check_router_mem_status.var`,
+created interactively on first run from `.var/examples/check_router_mem_status.var.EXAMPLE`.
 
 ## Troubleshooting
 
-### "CSV file not found"
+### "No routers found in _DATA/routers.csv"
 
-1. Check file exists in _DATA:
+1. Check the file exists:
    ```bash
    ls -la _DATA/routers.csv
    ```
-
-2. If file doesn't exist, copy from examples:
+2. If missing, copy from the example and edit:
    ```bash
-   cp _DATA/examples/router_config_template.EXAMPLE _DATA/routers.csv
-   ```
-
-3. Edit with actual router IPs and hostnames:
-   ```bash
-   # Edit _DATA/routers.csv and add your routers
-   ```
-
-4. Use custom path if needed:
-   ```
-   Enter path to CSV file [_DATA/routers.csv]: /custom/path/routers.csv
+   cp _DATA/examples/routers.csv.EXAMPLE _DATA/routers.csv
    ```
 
 ### "CSV must contain 'router_ip' and 'hostname' columns"
 
-CSV headers are searched (case-insensitive):
-- IP column: `router_ip`, `ip`, `address`
-- Hostname column: `hostname`, `name`, `router_name`
+CSV headers required: `router_ip`, `hostname`.
 
-Valid example:
-```csv
-router_ip,hostname
-192.168.1.1,router-01
-```
+### No credentials found for a router
 
-### "No credentials found" in Mode 2
-
-When using per-router credentials:
-1. Script looks for `[CUBE:hostname]` matching CSV hostnames
-2. If not found, user is prompted
-3. This is normal - add entries to credentials.env to avoid prompting
-
-Solution - add to credentials.env:
-```ini
-[CUBE:aawoods-vg-8000v]
-username=admin
-password=
-
-[CUBE:aw-slab42-lg]
-username=admin
-password=
-```
+The credential loader checks `[CUBE:<hostname>]`, then `[CUBE:default]`,
+then prompts interactively. Add an entry to `.env/credentials.env` to avoid
+being prompted every run.
 
 ### Connection timeout
 
-1. Verify router IP is correct in CSV
+1. Verify router IP is correct in the CSV
 2. Verify router is reachable: `ping <ip>`
-3. Verify SSH is enabled on router
-4. Verify SSH port (default 22)
+3. Verify SSH is enabled on the router (default port 22)
 
 ### Authentication failed
 
-1. Verify username is correct
-2. Verify password is correct
-3. Check router logs for failed attempts
-4. Verify user has SSH access
+1. Verify username and password are correct
+2. Check router logs for failed attempts
+3. Verify the user has SSH access
 
 ## Code Architecture
 
 ### Key Features
-- CSV-based router discovery (routers.csv)
-- Centralized credentials (credentials.env)
-- Single and per-router credential modes
-- Automatic hostname-based matching
-- Graceful fallback to prompting
+- Router discovery via the shared `_DATA/routers.csv` selector
+- Centralized credentials via `.env/credentials.env`
+- Single-router and multi-router (all routers) modes
+- `--default` flag for unattended scheduled runs
+- Automatic hostname-based credential matching
 
 ### Main Function Flow
-1. Prompt for CSV file path (default: `_DATA/routers.csv`)
-2. Read routers from CSV (IP + hostname)
-3. Ask credential mode (1=single, 2=per-router)
-4. Load credentials from credentials.env
-5. Execute commands on routers
-6. Display results
-7. Option to send summary email
-
-## Next Steps
-
-1. Create/update routers.csv with router IPs and names
-2. Add credentials to credentials.env:
-   - Option A: Single `[CUBE:default]` entry
-   - Option B: Per-router entries matching hostnames
-3. Run: `python3 cube/check_router_mem_status.py`
-4. Select credential mode when prompted
-5. Review results, send email if desired
+1. Start logger, log "Router Memory Status - Started"
+2. Load customer variables (`low_memory_threshold`)
+3. Select router(s) and credentials
+4. Execute the memory status command on each router
+5. Display results, log "Router Memory Status - Completed"
+6. Optionally send a summary email
 
 ## Questions?
 
