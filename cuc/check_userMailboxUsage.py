@@ -39,6 +39,9 @@ clusters, each cluster's output file is suffixed with "-<cluster_name>" before .
 Logs: ../_logs/<timestamp>-check-user-mailbox-usage.log
 """
 
+import warnings
+warnings.simplefilter('ignore')
+
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))

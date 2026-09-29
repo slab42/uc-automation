@@ -38,6 +38,9 @@ Output: HTML reports written to _DATA/reports/<timestamp>-<hostname>_comparison.
 Logs: ../_logs/<timestamp>-compare-router-config.log
 """
 
+import warnings
+warnings.simplefilter('ignore')
+
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))

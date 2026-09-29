@@ -32,6 +32,9 @@ Output: mailbox report is printed to the console (and logged) for each extension
 Logs: ../_logs/<timestamp>-check-user-mailbox.log
 """
 
+import warnings
+warnings.simplefilter('ignore')
+
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))

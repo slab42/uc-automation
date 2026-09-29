@@ -14,6 +14,9 @@ hostedRoutePSTNRule: No PSTN, Use pattern, Specify
 Logs: ../_logs/<timestamp>-add-advertised-pattern.log
 """
 
+import warnings
+warnings.simplefilter('ignore')
+
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))

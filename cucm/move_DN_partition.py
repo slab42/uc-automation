@@ -36,6 +36,9 @@ CSV format (pattern, routePartition, newRoutePartition):
 Logs: ../_logs/<timestamp>-move-dn-partition.log
 """
 
+import warnings
+warnings.simplefilter('ignore')
+
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))

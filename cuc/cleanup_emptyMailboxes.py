@@ -41,6 +41,9 @@ multiple clusters, each cluster's output file is suffixed with "-<cluster_name>"
 Logs: ../_logs/<timestamp>-cleanup-empty-mailboxes.log
 """
 
+import warnings
+warnings.simplefilter('ignore')
+
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))

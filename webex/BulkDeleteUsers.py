@@ -21,6 +21,9 @@ The CSV file should be created using the format from the CSV export from Control
 __author__ = "Matt Klawiter"
 __date__ = "2020/4/29"
 
+import warnings
+warnings.simplefilter('ignore')
+
 #############  Imports  #############
 import requests
 import json

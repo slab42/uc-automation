@@ -8,6 +8,9 @@ Based on: https://developer.webex.com/calling/docs/api/v1/numbers/add-phone-numb
 __author__ = "Dan Fox"
 __date__ = "2026/07/22"
 
+import warnings
+warnings.simplefilter('ignore')
+
 #############  Imports  #############
 import requests
 import json

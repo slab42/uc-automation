@@ -24,6 +24,9 @@ CSV default: _DATA/phone.csv
 Logs: ../_logs/<timestamp>-update-phone-load.log
 """
 
+import warnings
+warnings.simplefilter('ignore')
+
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))

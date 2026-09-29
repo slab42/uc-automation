@@ -28,6 +28,9 @@ When excluding analog devices, the script filters out:
 """
 
 import warnings
+warnings.simplefilter('ignore')
+
+import warnings
 warnings.filterwarnings('ignore', category=Warning, module='urllib3')
 
 from pathlib import Path

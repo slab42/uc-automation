@@ -43,6 +43,9 @@ Output: Summary printed to console; optional email sent via customer_env.json
 Logs: ../_logs/<timestamp>-check-router-mem-status.log
 """
 
+import warnings
+warnings.simplefilter('ignore')
+
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))

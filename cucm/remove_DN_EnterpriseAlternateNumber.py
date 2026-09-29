@@ -22,6 +22,9 @@ CSV default: _DATA/rm_dnEnterpriseAltNumbers.csv
 Logs: ../_logs/<timestamp>-remove-dn-enterprisealternatenumber.log
 """
 
+import warnings
+warnings.simplefilter('ignore')
+
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))

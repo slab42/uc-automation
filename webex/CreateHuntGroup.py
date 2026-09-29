@@ -1,4 +1,8 @@
 # TITLE: Create Hunt Group
+
+import warnings
+warnings.simplefilter('ignore')
+
 import requests
 import json
 from csv import reader

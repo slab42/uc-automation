@@ -18,6 +18,9 @@ For example:
 If both exist with the same 11-digit suffix, prompts to delete the '.+' version.
 """
 
+import warnings
+warnings.simplefilter('ignore')
+
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))

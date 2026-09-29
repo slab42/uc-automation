@@ -1,4 +1,8 @@
 # TITLE: Create Call Queue
+
+import warnings
+warnings.simplefilter('ignore')
+
 import requests
 import json
 from csv import reader

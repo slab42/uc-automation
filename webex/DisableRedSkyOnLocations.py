@@ -1,5 +1,8 @@
 # TITLE: Disable RedSky on Locations
 
+import warnings
+warnings.simplefilter('ignore')
+
 import requests
 import json
 

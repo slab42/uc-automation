@@ -32,6 +32,9 @@ The CSV may contain additional columns; only the "pattern" column is used.
 Logs: ../_logs/<timestamp>-remove-advertisted-pattern.log
 """
 
+import warnings
+warnings.simplefilter('ignore')
+
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))

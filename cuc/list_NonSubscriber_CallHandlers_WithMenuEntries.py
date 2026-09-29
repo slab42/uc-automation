@@ -41,6 +41,9 @@ Output: _DATA/non_subscriber_callhandlers.csv, _DATA/menuentries.csv (defaults),
 Logs: ../_logs/<timestamp>-list-nonsubscriber-call-handlers.log
 """
 
+import warnings
+warnings.simplefilter('ignore')
+
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
