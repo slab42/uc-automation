@@ -902,7 +902,8 @@ class AXL(object):
                         'pattern' : '',
                         'description' : '',
                         'routePartitionName' : '',
-                        'alertingName' : ''
+                        'alertingName' : '',
+                        'callPickupGroupName' : ''
                     })
             if fullResp['return'] == None:
                 resp = ''
@@ -915,8 +916,39 @@ class AXL(object):
             result['error'] = error.message
         result = serialize_object(result)
         return result
-        
-        
+
+
+    def list_HuntPilot(self, searchFor, searchString):
+        """
+        Get Hunt Pilot details
+        :return: A list of dictionaries. If > 1000 records are returned, a list of list of dictionaries will be returned
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+        try:
+            fullResp = self.service.listHuntPilot(
+                    {searchFor : f'{searchString}'}, returnedTags={
+                        'pattern' : '',
+                        'description' : '',
+                        'routePartitionName' : '',
+                        'callPickupGroupName' : ''
+                    })
+            if fullResp['return'] == None:
+                resp = ''
+            else:
+                resp = fullResp['return']['huntPilot']
+            result['success'] = True
+            result['response'] = resp
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        result = serialize_object(result)
+        return result
+
+
     def list_Phone(self):
         """
         Get phone details
@@ -2114,6 +2146,359 @@ class AXL(object):
         return result
 
 
+    def list_common_device_configs(self):
+        """
+        Get List of Common Device Configurations with names and UUIDs
+        Queries commondeviceconfig table to get both pkid and name
+        :return: A list of dictionaries with names and UUIDs
+        """
+        result = {
+            'success': False,
+            'response': [],
+            'error': '',
+        }
+
+        query = "SELECT pkid, name FROM commondeviceconfig ORDER BY name"
+        query_result = self.execute_sql_query(query)
+
+        if not query_result.get('success'):
+            result['success'] = False
+            result['error'] = query_result.get('error', 'Unknown error executing SQL query')
+            result = serialize_object(result)
+            return result
+
+        fields = query_result.get('response')
+        result['success'] = True
+        result['response'] = self._reconstruct_rows(fields, 2) if fields else []
+        result = serialize_object(result)
+        return result
+
+
+    def find_common_device_config_dependencies(self, cdc_name):
+        """
+        Find all references to a Common Device Configuration using SQL query
+        :param cdc_name: Common Device Configuration name
+        :return: result dictionary with list of devices/device pools/profiles using this config
+        """
+        result = {
+            'success': False,
+            'response': [],
+            'error': '',
+        }
+
+        # Get the PKID of the Common Device Configuration
+        cdc_pkid = None
+        try:
+            query = f"SELECT pkid FROM commondeviceconfig WHERE name = '{cdc_name}'"
+            pkid_result = self.execute_sql_query(query)
+            if pkid_result.get('success') and pkid_result.get('response'):
+                fields = pkid_result.get('response')
+                if fields and isinstance(fields[0], dict):
+                    cdc_pkid = fields[0].get('pkid')
+        except Fault:
+            pass
+
+        if not cdc_pkid:
+            result['success'] = True
+            result['response'] = []
+            result = serialize_object(result)
+            return result
+
+        all_dependencies = []
+
+        # Tables that reference commondeviceconfig via fkcommondeviceconfig
+        tables_to_check = [
+            ('device', 'Device'),
+            ('devicepool', 'Device Pool'),
+            ('deviceprofile', 'Device Profile'),
+        ]
+
+        for table_name, type_name in tables_to_check:
+            try:
+                query = f"""
+                SELECT DISTINCT {table_name}.name as name, '{type_name}' as type
+                FROM {table_name}
+                WHERE {table_name}.fkcommondeviceconfig = '{cdc_pkid}'
+                ORDER BY name
+                """
+                query_result = self.execute_sql_query(query)
+                if query_result.get('success') and query_result.get('response'):
+                    fields = query_result.get('response')
+                    rows = self._reconstruct_rows(fields, 2)
+                    all_dependencies.extend(rows)
+            except Fault:
+                pass
+
+        result['success'] = True
+        result['response'] = all_dependencies
+        result = serialize_object(result)
+        return result
+
+
+    def delete_common_device_config(self, name):
+        """
+        Delete a Common Device Configuration by name
+        :param name: Common Device Configuration name
+        :return: result dictionary
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+        try:
+            self.service.removeCommonDeviceConfig(name=name)
+            result['success'] = True
+            result['response'] = f'Common Device Configuration "{name}" deleted successfully'
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        except Exception as error:
+            result['response'] = 'ERROR'
+            result['error'] = str(error)
+        result = serialize_object(result)
+        return result
+
+
+    def _resolve_call_pickup_group_table(self):
+        """
+        Determine the actual database table name for Call Pickup Groups
+        (varies across CUCM versions/builds). Caches the resolved name.
+        :return: table name string, or None if none of the candidates exist
+        """
+        if getattr(self, '_cpg_table_name', None):
+            return self._cpg_table_name
+
+        candidates = ['pickupgroup', 'callpickupgroup', 'cpgroup']
+        for table_name in candidates:
+            try:
+                query = f"SELECT pkid FROM {table_name} LIMIT 1"
+                probe_result = self.execute_sql_query(query)
+                if probe_result.get('success'):
+                    self._cpg_table_name = table_name
+                    return table_name
+            except Fault:
+                pass
+        return None
+
+
+    def list_call_pickup_groups(self):
+        """
+        Get List of Call Pickup Groups with names and UUIDs
+        Queries the Call Pickup Group table to get both pkid and name
+        :return: A list of dictionaries with names and UUIDs
+        """
+        result = {
+            'success': False,
+            'response': [],
+            'error': '',
+        }
+
+        table_name = self._resolve_call_pickup_group_table()
+        if not table_name:
+            result['error'] = 'Could not locate Call Pickup Group table in database'
+            result = serialize_object(result)
+            return result
+
+        query = f"SELECT pkid, name FROM {table_name} ORDER BY name"
+        query_result = self.execute_sql_query(query)
+
+        if not query_result.get('success'):
+            result['success'] = False
+            result['error'] = query_result.get('error', 'Unknown error executing SQL query')
+            result = serialize_object(result)
+            return result
+
+        fields = query_result.get('response')
+        result['success'] = True
+        result['response'] = self._reconstruct_rows(fields, 2) if fields else []
+        result = serialize_object(result)
+        return result
+
+
+    def get_CallPickupGroup(self, name, member_variant='dn'):
+        """
+        Get a Call Pickup Group's full details, including its members, via AXL
+        :param name: Call Pickup Group name
+        :param member_variant: 'dn' to resolve member Directory Numbers, 'group' to
+            resolve nested Call Pickup Group members (the member sub-element is a
+            choice, so each variant must be requested with its own call)
+        :return: result dictionary with pattern, name, routePartitionName, members
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+        if member_variant == 'group':
+            member_fields = {
+                'priority': '',
+                'pickupGroupName': '',
+            }
+        else:
+            member_fields = {
+                'priority': '',
+                'pickupDnAndPartition': {
+                    'dnPattern': '',
+                    'routePartitionName': '',
+                },
+            }
+        try:
+            resp = self.service.getCallPickupGroup(name=name, returnedTags={
+                'name': '',
+                'pattern': '',
+                'routePartitionName': '',
+                'members': {
+                    'member': member_fields,
+                },
+            })
+            result['success'] = True
+            result['response'] = resp['return']['callPickupGroup']
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        result = serialize_object(result)
+        return result
+
+
+    def _extract_fk_value(self, value):
+        """
+        AXL foreign-key fields (XFkType) can come back as a plain string or as an
+        OrderedDict with '_value_1' (name) and 'uuid'. Normalize to a plain string.
+        """
+        if isinstance(value, dict):
+            return value.get('_value_1')
+        return value
+
+
+    def _extract_call_pickup_group_members(self, cpg_name, member_variant):
+        """
+        Fetch and normalize the member list for one member_variant ('dn' or 'group')
+        :return: (members list, error string or None)
+        """
+        detail_result = self.get_CallPickupGroup(cpg_name, member_variant=member_variant)
+        if not detail_result.get('success'):
+            return [], detail_result.get('error', 'Unknown error retrieving Call Pickup Group')
+
+        cpg = detail_result.get('response') or {}
+        members_container = cpg.get('members') if isinstance(cpg, dict) else None
+        members = members_container.get('member') if members_container else None
+        if members is None:
+            members = []
+        elif not isinstance(members, list):
+            members = [members]
+        return members, None
+
+
+    def find_call_pickup_group_dependencies(self, cpg_name):
+        """
+        Find all references to a Call Pickup Group: Directory Numbers whose Line
+        config has this group assigned as their Call Pickup Group (via listLine,
+        since getCallPickupGroup's own member list only reflects nested/cascading
+        group associations, not per-Line assignments), Hunt Pilots whose config
+        has this group assigned (via listHuntPilot, same reasoning as Lines),
+        plus any nested Call Pickup Groups (via AXL getCallPickupGroup)
+        :param cpg_name: Call Pickup Group name
+        :return: result dictionary with list of dependent objects
+        """
+        result = {
+            'success': False,
+            'response': [],
+            'error': '',
+        }
+
+        dependencies = []
+
+        # Directory Numbers whose Line-level "Call Pickup Group" is set to this
+        # group. This isn't reflected in the CPG's own AXL member list (that list
+        # is only used for nested/cascading pickup group associations), so we have
+        # to list all Lines and filter for ones pointing at this group.
+        lines_result = self.list_Line('pattern', '%')
+        if lines_result.get('success'):
+            lines = lines_result.get('response') or []
+            if not isinstance(lines, list):
+                lines = [lines]
+            for line in lines:
+                if not isinstance(line, dict):
+                    continue
+                line_cpg = self._extract_fk_value(line.get('callPickupGroupName'))
+                if line_cpg == cpg_name:
+                    dn_pattern = line.get('pattern')
+                    dn_partition = self._extract_fk_value(line.get('routePartitionName')) or 'None'
+                    dependencies.append({
+                        'name': f"{dn_pattern} ({dn_partition})",
+                        'type': 'Directory Number',
+                    })
+        else:
+            result['error'] = lines_result.get('error', 'Unknown error retrieving Lines')
+
+        # Hunt Pilots whose "Call Pickup Group" is set to this group. Like Lines,
+        # this isn't reflected in the CPG's own AXL member list.
+        hunt_pilots_result = self.list_HuntPilot('pattern', '%')
+        if hunt_pilots_result.get('success'):
+            hunt_pilots = hunt_pilots_result.get('response') or []
+            if not isinstance(hunt_pilots, list):
+                hunt_pilots = [hunt_pilots]
+            for hunt_pilot in hunt_pilots:
+                if not isinstance(hunt_pilot, dict):
+                    continue
+                hp_cpg = self._extract_fk_value(hunt_pilot.get('callPickupGroupName'))
+                if hp_cpg == cpg_name:
+                    hp_pattern = hunt_pilot.get('pattern')
+                    hp_partition = self._extract_fk_value(hunt_pilot.get('routePartitionName')) or 'None'
+                    dependencies.append({
+                        'name': f"{hp_pattern} ({hp_partition})",
+                        'type': 'Hunt Pilot',
+                    })
+        elif not result['error']:
+            result['error'] = hunt_pilots_result.get('error', 'Unknown error retrieving Hunt Pilots')
+
+        group_members, group_error = self._extract_call_pickup_group_members(cpg_name, 'group')
+
+        for member in group_members:
+            if not isinstance(member, dict):
+                continue
+
+            nested_group = self._extract_fk_value(member.get('pickupGroupName'))
+            # A group's first member always points back to itself; that's not a
+            # real nested-group dependency.
+            if nested_group and nested_group != cpg_name:
+                dependencies.append({
+                    'name': nested_group,
+                    'type': 'Nested Call Pickup Group',
+                })
+
+        result['success'] = True
+        result['response'] = dependencies
+        result = serialize_object(result)
+        return result
+
+
+    def delete_call_pickup_group(self, name):
+        """
+        Delete a Call Pickup Group by name
+        :param name: Call Pickup Group name
+        :return: result dictionary
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+        try:
+            self.service.removeCallPickupGroup(name=name)
+            result['success'] = True
+            result['response'] = f'Call Pickup Group "{name}" deleted successfully'
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        except Exception as error:
+            result['response'] = 'ERROR'
+            result['error'] = str(error)
+        result = serialize_object(result)
+        return result
+
+
     def _query_location_dependency(self, table_name, type_name, column_name, location_name):
         """
         Helper method to query a table for location dependencies
@@ -2755,12 +3140,16 @@ class AXL(object):
             query = f"SELECT * FROM {table_name} LIMIT 1"
             query_result = self.execute_sql_query(query)
             if query_result.get('success') and query_result.get('response'):
-                # Extract column names from the response
+                # execute_sql_query returns one dict per field, not one merged
+                # dict per row - merge them all to get the full column list
                 resp = query_result.get('response')
                 if resp and isinstance(resp, list) and len(resp) > 0:
-                    if isinstance(resp[0], dict):
-                        result['columns'] = list(resp[0].keys())
-                    result['response'] = str(resp[0])
+                    merged_row = {}
+                    for field in resp:
+                        if isinstance(field, dict):
+                            merged_row.update(field)
+                    result['columns'] = list(merged_row.keys())
+                    result['response'] = str(merged_row)
                 result['success'] = True
             else:
                 result['error'] = query_result.get('error', 'No data returned')
