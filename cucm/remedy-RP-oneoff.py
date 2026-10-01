@@ -5,8 +5,8 @@
 Find Route Patterns with Dot Format but Missing Non-Dot Format
 
 Connects to CUCM, retrieves all route patterns, and identifies patterns
-that exist in dotted format (\+.12702106713) but NOT in standard format
-(\+12702106713). Exports mismatches to a CSV file.
+that exist in dotted format (\\+.12702106713) but NOT in standard format
+(\\+12702106713). Exports mismatches to a CSV file.
 
 CUCM Cluster: select from clusters.csv or provide manually
 Credentials: checks stored credentials in credentials.env

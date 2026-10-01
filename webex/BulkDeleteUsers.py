@@ -46,7 +46,7 @@ getMyDetailsURL = 'https://webexapis.com/v1/people/me'             # Webex CH Ge
 
 #############   User Input and Validation  #############
 print('This script requires two inputs:')
-print('    1. The full file path on your device for an input CSV file\n       (ex: C:\Scripts\exported_file.csv on Windows or ~/Scripts/exported_file.csv on Mac)\n')
+print('    1. The full file path on your device for an input CSV file\n       (ex: C:\\Scripts\exported_file.csv on Windows or ~/Scripts/exported_file.csv on Mac)\n')
 print('    2. An access token used to authorize the API calls\n       (You can get yours from https://developer.webex.com/docs/api/getting-started)')
 print('    If you changed these variables in the script itself, it will attempt to validate and use those values instead\n')
 validationSuccess = 0

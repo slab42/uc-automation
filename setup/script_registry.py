@@ -14,6 +14,7 @@ a reason, so a human can fix it (or not) without the launcher guessing.
 """
 
 import ast
+import warnings
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -85,7 +86,9 @@ def read_description(path: Path) -> Optional[str]:
     """
     try:
         src = path.read_text(encoding='utf-8', errors='replace')
-        tree = ast.parse(src)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', SyntaxWarning)
+            tree = ast.parse(src)
     except (SyntaxError, ValueError, UnicodeDecodeError, OSError):
         return None
 
