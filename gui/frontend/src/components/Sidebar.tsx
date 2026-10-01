@@ -79,6 +79,7 @@ export default function Sidebar() {
                         onMouseLeave={scheduleClose}
                       >
                         <span className="sidebar-subitem-title">{script.title}</span>
+                        {script.page && <span className="args-badge rich-badge">table</span>}
                         {script.takes_args && <span className="args-badge">args</span>}
                       </NavLink>
                     ))}
@@ -90,6 +91,24 @@ export default function Sidebar() {
         </nav>
 
         <div className="sidebar-footer">
+          <NavLink
+            to="/resources"
+            className={({ isActive }) => `sidebar-settings ${isActive ? 'active' : ''}`}
+          >
+            <span className="sidebar-gear" aria-hidden="true">
+              &#9776;
+            </span>
+            Resources
+          </NavLink>
+          <NavLink
+            to="/database"
+            className={({ isActive }) => `sidebar-settings ${isActive ? 'active' : ''}`}
+          >
+            <span className="sidebar-gear" aria-hidden="true">
+              &#9707;
+            </span>
+            Database
+          </NavLink>
           <NavLink
             to="/settings"
             className={({ isActive }) => `sidebar-settings ${isActive ? 'active' : ''}`}

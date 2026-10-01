@@ -127,7 +127,38 @@ docstring for the recognised conventions and keep new scripts to them.
 - Exit code semantics: the script's own code; death by signal N is reported
   as `128 + N`; a socket closed mid-run kills the child and sends no `exit`.
 
-## 6. Changelog
+## 6. Rich resource pages and the local database
+
+The script pages are no longer CLI-shaped. Each script that maps to a kind
+of object (softkey templates, call handlers, Webex users, ...) shows a
+**resource panel** instead of a prompt log: a system picker, **Sync**, a
+sortable/filterable table with a checkbox per row, **Select all / Unselect
+all**, a **Dependencies** column, and action buttons (Delete, Move, Set PIN,
+...). The original prompt runner is still on every such page under "Run the
+script instead", and is the whole page for scripts with no mapping.
+
+| Piece | Owns |
+|---|---|
+| `gui/backend/resources/types.py` | The contract: `ResourceSpec`, `Column`, `Action`, `Field`, `Item`, `Dependency`. Read its docstring before writing a provider. |
+| `gui/backend/resources/providers/*.py` | One module per platform, each registering specs. No per-resource frontend code exists: the table, forms and buttons are drawn from the spec. |
+| `gui/backend/resources/registry.py` | `sync()` (live -> cache, authoritative), `scan_deps()`, `run_action()` (per-row results; refuses protected rows and, with `block_when_deps`, in-use rows). |
+| `gui/backend/db.py` | SQLite cache `_DATA/uc_cache.db` (git-ignored, safe to delete): `resource_items`, `sync_state`, `action_log`. Generic JSON payload rows, so a new resource needs no migration. |
+| `gui/backend/connections.py` | Targets from clusters.csv / routers.csv / `WEBEX:` sections; cached clients; credentials. Never calls `getpass`. A blank password raises `NeedsCredentials` (HTTP 409) and the page shows an Unlock dialog; the value is held in process memory only. |
+| `gui/backend/jobs.py` | Sync/action/deps run on worker threads; page follows `WS /ws/jobs/{id}` (polling fallback). |
+| `gui/backend/api_resources.py` | `/api/resources*`, `/api/jobs*`, `/api/connections*`, `/api/db*`. A GET never touches a UC system; only Sync does. |
+| `gui/backend/pages.py` | Script `rel` -> resource ids, intro text, hidden actions, default filters. |
+| `webex/webexAPI.py` | Shared Webex REST client (counterpart of `ucmAPI.py` / `cucAPI.py`). |
+| `python3 -m gui.backend.resources.check` | Offline validator for the registry and `pages.py`; `/api/health` reports the same problems. |
+
+The sidebar gains **Resources** (browse any registered resource) and
+**Database** (row counts, **Sync DB**, connection unlock state, change log,
+clear cache).
+
+Adding a resource: write a `ResourceSpec` in a provider, add its id to the
+right entry in `pages.py`, run the check module. Dependency scans are
+opt-in per sync because they cost several SQL queries per row.
+
+## 7. Changelog
 
 **2026-09-28**: Initial build on branch `GUI-add-on`: `main.py --gui`,
 `gui/backend/` (FastAPI, PTY runner, credentials editor),
@@ -137,3 +168,7 @@ docstring for the recognised conventions and keep new scripts to them.
 replaced by the `sitecustomize` prompt shim on pipes, prompt classifier,
 argparse options form, `_DATA` file list/upload/download. xterm.js dropped
 from the frontend.
+
+
+**2026-10-01**: Branch `gui-rich-resources`: resource panels, SQLite cache,
+jobs, connection unlock, Resources and Database pages (Section 6).

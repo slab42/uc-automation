@@ -1407,6 +1407,8 @@ class AXL(object):
             fullResp = self.service.listCallPickupGroup(
                     {'pattern' : f'%'}, returnedTags={
                         'pattern' : '',
+                        'description': '',
+                        'routePartitionName': '',
                     })
             if fullResp['return'] == None:
                 resp = ''
@@ -1452,7 +1454,7 @@ class AXL(object):
 
     def list_DevicePools(self):
         """
-        Get List of Device Pools
+        Get List of Device Pools, with region/location/media resource list
         :return: A list of dictionaries. If > 1000 records are returned, a list of list of dictionaries will be returned
         """
         result = {
@@ -1464,6 +1466,9 @@ class AXL(object):
             fullResp = self.service.listDevicePool(
                     {'name' : f'%'}, returnedTags={
                         'name' : '',
+                        'regionName': '',
+                        'locationName': '',
+                        'mediaResourceListName': '',
                     })
             if fullResp['return'] == None:
                 resp = ''
@@ -1520,6 +1525,7 @@ class AXL(object):
             fullResp = self.service.listMediaResourceList(
                     {'name' : f'%'}, returnedTags={
                         'name' : '',
+                        'clause' : '',
                     })
             if fullResp['return'] == None:
                 resp = ''
@@ -1576,7 +1582,8 @@ class AXL(object):
         try:
             fullResp = self.service.listPresenceGroup(
                     {'name' : f'%'}, returnedTags={
-                        'name' : ''
+                        'name' : '',
+                        'description' : ''
                     })
             if fullResp['return'] == None:
                 resp = ''
@@ -1688,7 +1695,8 @@ class AXL(object):
         try:
             fullResp = self.service.listVoiceMailProfile(
                     {'name' : f'%'}, returnedTags={
-                        'name' : ''
+                        'name' : '',
+                        'description' : ''
                     })
             if fullResp['return'] == None:
                 resp = ''
@@ -1702,6 +1710,105 @@ class AXL(object):
         result = serialize_object(result)
         return result
     
+
+    def list_Phones_search(self, searchFor, searchString):
+        """
+        List phones matching one search criterion (use this instead of list_Phone on big clusters)
+        :param searchFor: AXL search field, 'name' or 'description'
+        :param searchString: SQL-style pattern, e.g. '%SEP00%'
+        :return: result dictionary; response is a list of phone dictionaries ('' when none match)
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+        try:
+            fullResp = self.service.listPhone(
+                    {searchFor: f'{searchString}'}, returnedTags={
+                        'name': '',
+                        'product': '',
+                        'protocol': '',
+                        'description': '',
+                        'locationName': '',
+                        'devicePoolName': '',
+                        'ownerUserName': ''
+                    })
+            if fullResp['return'] == None:
+                resp = ''
+            else:
+                resp = fullResp['return']['phone']
+            result['success'] = True
+            result['response'] = resp
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        result = serialize_object(result)
+        return result
+
+
+    def list_Users(self, searchFor, searchString):
+        """
+        List end users matching one search criterion (PIN and password are never requested)
+        :param searchFor: AXL search field, 'userid' or 'lastName'
+        :param searchString: SQL-style pattern, e.g. 'smi%'
+        :return: result dictionary; response is a list of user dictionaries ('' when none match)
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+        try:
+            fullResp = self.service.listUser(
+                    {searchFor: f'{searchString}'}, returnedTags={
+                        'userid': '',
+                        'firstName': '',
+                        'lastName': '',
+                        'department': '',
+                        'telephoneNumber': ''
+                    })
+            if fullResp['return'] == None:
+                resp = ''
+            else:
+                resp = fullResp['return']['user']
+            result['success'] = True
+            result['response'] = resp
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        result = serialize_object(result)
+        return result
+
+
+    def list_AudioCodecPreferenceLists(self):
+        """
+        Get List of Audio Codec Preference Lists
+        :return: result dictionary; response is a list of dictionaries ('' when none)
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+        try:
+            fullResp = self.service.listAudioCodecPreferenceList(
+                    {'name': f'%'}, returnedTags={
+                        'name': '',
+                        'description': ''
+                    })
+            if fullResp['return'] == None:
+                resp = ''
+            else:
+                resp = fullResp['return']['audioCodecPreferenceList']
+            result['success'] = True
+            result['response'] = resp
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        result = serialize_object(result)
+        return result
+
 
     def execute_sql_update(self, query):
         """

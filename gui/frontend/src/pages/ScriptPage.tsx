@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { useScripts } from '../App'
 import { buildWsUrl, getScript, uploadDataFile } from '../api'
 import DocModal from '../components/DocModal'
+import ResourcePanel from '../components/ResourcePanel'
 import type { PromptMessage, ScriptInfo, ScriptOption, WsServerMessage } from '../types'
 
 type RunStatus =
@@ -79,6 +80,7 @@ export default function ScriptPage() {
   }, [categories, rel])
 
   const [script, setScript] = useState<ScriptInfo | null>(fromContext)
+  const [runnerOpen, setRunnerOpen] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [status, setStatus] = useState<RunStatus>({ kind: 'idle' })
   const [showDoc, setShowDoc] = useState(false)
@@ -309,6 +311,11 @@ export default function ScriptPage() {
       break
   }
 
+  // A script with a rich layout keeps its runner, collapsed; one without
+  // is still exactly the page it was before.
+  const page = script.page ?? null
+  const showRunner = !page || runnerOpen
+
   const commandPreview = `python3 ${script.filename} ${buildArgsPreview(
     options,
     optionValues,
@@ -329,7 +336,35 @@ export default function ScriptPage() {
         </button>
       </div>
 
-      {hasOptionsForm && (
+      {page && (
+        <div className="rich-page">
+          {page.intro && <p className="rich-page-intro">{page.intro}</p>}
+          {page.resources.map((resourceId, index) => (
+            <ResourcePanel
+              key={resourceId}
+              resourceId={resourceId}
+              hideActions={page.hide_actions}
+              depsDefault={page.deps_default}
+              initialFilters={page.filters}
+              startCollapsed={index > 0}
+            />
+          ))}
+        </div>
+      )}
+
+      {page && (
+        <div className="runner-toggle">
+          <button type="button" className="btn-link" onClick={() => setRunnerOpen((v) => !v)}>
+            {runnerOpen ? 'Hide' : 'Run the script instead'}
+          </button>
+          <span className="field-hint">
+            The original prompt-driven run of <code>{script.filename}</code>, unchanged. Use it for
+            anything the panels above do not cover, such as a bulk CSV load.
+          </span>
+        </div>
+      )}
+
+      {showRunner && hasOptionsForm && (
         <div className="options-card">
           <h3>Options</h3>
           {options.map((opt) => (
@@ -371,6 +406,7 @@ export default function ScriptPage() {
         </div>
       )}
 
+      {showRunner && (
       <div className="script-controls">
         <button
           className="btn btn-primary"
@@ -384,11 +420,13 @@ export default function ScriptPage() {
         </button>
         <span className={`status-line status-${status.kind}`}>{statusText}</span>
       </div>
+      )}
 
-      {prompt && (
+      {showRunner && prompt && (
         <PromptCard prompt={prompt} onAnswer={(value) => sendAnswer(prompt.id, value)} />
       )}
 
+      {showRunner && (
       <div className="activity-log-wrap">
         <div className="activity-log-header">
           <h3>Activity log</h3>
@@ -405,6 +443,7 @@ export default function ScriptPage() {
           <div ref={logEndRef} />
         </pre>
       </div>
+      )}
 
       {showDoc && <DocModal script={script} onClose={() => setShowDoc(false)} />}
     </div>

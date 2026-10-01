@@ -4,6 +4,8 @@ import { getScripts } from './api'
 import Sidebar from './components/Sidebar'
 import Landing from './pages/Landing'
 import ScriptPage from './pages/ScriptPage'
+import DatabasePage from './pages/DatabasePage'
+import ResourcesPage from './pages/ResourcesPage'
 import SettingsPage from './pages/SettingsPage'
 import type { CategoryInfo } from './types'
 
@@ -62,6 +64,9 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/scripts/*" element={<ScriptPage />} />
+            <Route path="/resources" element={<ResourcesPage />} />
+            <Route path="/resources/:resourceId" element={<ResourcesPage />} />
+            <Route path="/database" element={<DatabasePage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </main>

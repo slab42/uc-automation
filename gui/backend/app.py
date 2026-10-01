@@ -35,8 +35,10 @@ if str(ROOT) not in sys.path:
 from setup.multi_object_loader import read_clusters_csv, read_routers_csv  # noqa: E402
 from setup.script_registry import CATEGORIES, ScriptEntry, discover, read_description  # noqa: E402
 
-from gui.backend import ini_editor  # noqa: E402
+from gui.backend import api_resources, db, ini_editor, pages  # noqa: E402
 from gui.backend.argspec import extract_options  # noqa: E402
+from gui.backend.resources import check as resource_check  # noqa: E402
+from gui.backend.resources import registry  # noqa: E402
 from gui.backend.runner import run_over_websocket  # noqa: E402
 
 FRONTEND_DIST = ROOT / "gui" / "frontend" / "dist"
@@ -50,8 +52,10 @@ _SAFE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._ -]{0,120}$")
 
 def _entry_to_dict(entry: ScriptEntry, with_description: bool = True) -> dict:
     options = extract_options(entry.path) if entry.takes_args else []
+    page = pages.for_rel(entry.rel)
     return {
         "rel": entry.rel,
+        "page": page.to_dict() if page else None,
         "filename": entry.path.name,
         "title": entry.title,
         "category": entry.category,
@@ -112,11 +116,20 @@ def create_app() -> FastAPI:
     app = FastAPI(title="slab42 UC-Automations", docs_url="/api/docs",
                   openapi_url="/api/openapi.json", redoc_url=None)
 
+    app.include_router(api_resources.router)
+
     @app.get("/api/health")
     def health() -> dict:
+        """Liveness plus the two things that go wrong in practice: a missing
+        frontend build, and a page spec pointing at a resource no provider
+        registers (which would otherwise show as a blank panel)."""
         return {"status": "ok", "root": str(ROOT),
                 "python": sys.version.split()[0],
-                "frontend_built": (FRONTEND_DIST / "index.html").exists()}
+                "frontend_built": (FRONTEND_DIST / "index.html").exists(),
+                "resource_count": len(registry.all()),
+                "rich_page_count": len(pages.PAGES),
+                "registry_problems": resource_check.check(),
+                "database": db.stats()}
 
     @app.get("/api/scripts")
     def list_scripts() -> dict:

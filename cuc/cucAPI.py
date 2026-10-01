@@ -236,6 +236,20 @@ class CUC:
         """Delete a user (and therefore its mailbox) by URI."""
         return self.delete(user_uri)
 
+    def delete_user_by_id(self, object_id):
+        """Delete a user (and therefore its mailbox) by ObjectId."""
+        return self.delete(f'users/{object_id}')
+
+    def list_users(self):
+        """
+        Return every mailbox user (subscriber account) as raw dicts.
+
+        Returns:
+            result dict; response is a list of dicts (keys are <User> child tags such as
+            Alias, DisplayName, DtmfAccessId, ObjectId, URI).
+        """
+        return self.get_paged('users', 'User')
+
     # ------------------------------------------------------------------ call handlers
 
     def list_call_handlers(self):
