@@ -1138,6 +1138,109 @@ class AXL(object):
         return result
     
 
+    def remove_Phone(self, name):
+        """
+        Remove a phone by device name
+        :param name: Phone device name
+        :return: result dictionary
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+        try:
+            self.service.removePhone(name=name)
+            result['success'] = True
+            result['response'] = f'Phone {name} Removed'
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        result = serialize_object(result)
+        return result
+
+
+    def find_phone_lines(self, device_name):
+        """
+        Find a phone and its directory numbers (SQL)
+        :param device_name: Exact phone device name
+        :return: result dictionary; response is a list of {'name', 'pattern', 'partition'}
+            (one row per line; pattern/partition empty if the phone has no lines).
+            Empty list if the phone does not exist.
+        """
+        result = {
+            'success': False,
+            'response': [],
+            'error': '',
+        }
+        safe_name = device_name.replace("'", "''")
+        try:
+            query = f"""
+            SELECT d.name AS name, n.dnorpattern AS pattern, rp.name AS partition
+            FROM device d
+            LEFT JOIN devicenumplanmap m ON m.fkdevice = d.pkid
+            LEFT JOIN numplan n ON n.pkid = m.fknumplan
+            LEFT JOIN routepartition rp ON rp.pkid = n.fkroutepartition
+            WHERE d.name = '{safe_name}' AND d.tkclass = 1
+            ORDER BY m.numplanindex
+            """
+            query_result = self.execute_sql_query(query)
+            if not query_result.get('success'):
+                result['error'] = query_result.get('error')
+                return serialize_object(result)
+            rows = self._reconstruct_rows(query_result.get('response'), 3)
+            result['success'] = True
+            result['response'] = [{
+                'name': r.get('name') or '',
+                'pattern': r.get('pattern') or '',
+                'partition': r.get('partition') or '',
+            } for r in rows]
+        except Fault as error:
+            result['error'] = error.message
+        result = serialize_object(result)
+        return result
+
+
+    def find_line_devices(self, pattern, partition):
+        """
+        Find all devices/device profiles/remote destination profiles that use a DN (SQL)
+        :param pattern: Directory number
+        :param partition: Route partition name (empty string for no partition)
+        :return: result dictionary; response is a list of device names
+        """
+        result = {
+            'success': False,
+            'response': [],
+            'error': '',
+        }
+        safe_pattern = pattern.replace("'", "''")
+        safe_partition = partition.replace("'", "''")
+        if partition:
+            partition_clause = f"rp.name = '{safe_partition}'"
+        else:
+            partition_clause = "n.fkroutepartition IS NULL"
+        try:
+            query = f"""
+            SELECT d.name AS name
+            FROM numplan n
+            LEFT JOIN routepartition rp ON rp.pkid = n.fkroutepartition
+            INNER JOIN devicenumplanmap m ON m.fknumplan = n.pkid
+            INNER JOIN device d ON d.pkid = m.fkdevice
+            WHERE n.dnorpattern = '{safe_pattern}' AND {partition_clause}
+            """
+            query_result = self.execute_sql_query(query)
+            if not query_result.get('success'):
+                result['error'] = query_result.get('error')
+                return serialize_object(result)
+            rows = self._reconstruct_rows(query_result.get('response'), 1)
+            result['success'] = True
+            result['response'] = [r.get('name') for r in rows if r.get('name')]
+        except Fault as error:
+            result['error'] = error.message
+        result = serialize_object(result)
+        return result
+
+
     def remove_Location(self, name):
         """
         Remove a Location
