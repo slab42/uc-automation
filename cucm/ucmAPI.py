@@ -2363,11 +2363,14 @@ class AXL(object):
 
     def _extract_fk_value(self, value):
         """
-        AXL foreign-key fields (XFkType) can come back as a plain string or as an
-        OrderedDict with '_value_1' (name) and 'uuid'. Normalize to a plain string.
+        AXL foreign-key fields (XFkType) can come back as a plain string, a zeep
+        CompoundValue, or (post-serialize_object) an OrderedDict - each exposing
+        '_value_1' (name) and 'uuid'. Normalize to a plain string.
         """
         if isinstance(value, dict):
             return value.get('_value_1')
+        if hasattr(value, '_value_1'):
+            return value._value_1
         return value
 
 
@@ -3617,3 +3620,489 @@ class AXL(object):
         result = serialize_object(result)
         return result
             
+    def list_line_groups(self):
+        """
+        Get list of all Line Groups using AXL API
+        :return: result dictionary with list of line groups
+        """
+        result = {
+            'success': False,
+            'response': [],
+            'error': '',
+        }
+
+        try:
+            list_result = self.service.listLineGroup(
+                searchCriteria={'name': '%'},
+                returnedTags={'name': '', 'uuid': ''}
+            )
+
+            line_groups = []
+            if list_result['return'] is not None:
+                lgs = list_result['return']['lineGroup']
+                if lgs:
+                    if not isinstance(lgs, list):
+                        lgs = [lgs]
+                    for lg in lgs:
+                        line_groups.append({
+                            'name': lg['name'],
+                            'uuid': lg['uuid']
+                        })
+
+            result['success'] = True
+            result['response'] = line_groups
+        except Fault as error:
+            result['error'] = error.message
+        except Exception as error:
+            result['error'] = str(error)
+
+        result = serialize_object(result)
+        return result
+
+
+    def get_line_group(self, name):
+        """
+        Get details of a specific Line Group using AXL API
+        :param name: Line Group name
+        :return: result dictionary with line group details
+        """
+        result = {
+            'success': False,
+            'response': {},
+            'error': '',
+        }
+
+        try:
+            get_result = self.service.getLineGroup(name=name)
+
+            if get_result['return'] is None:
+                result['error'] = 'Line Group not found'
+                result = serialize_object(result)
+                return result
+
+            lg = get_result['return']['lineGroup']
+            if not lg:
+                result['error'] = 'Line Group not found'
+                result = serialize_object(result)
+                return result
+
+            members = []
+            members_container = lg['members']
+            if members_container is not None and members_container['member'] is not None:
+                member_data = members_container['member']
+                if not isinstance(member_data, list):
+                    member_data = [member_data]
+                for member in member_data:
+                    dirn = member['directoryNumber']
+                    members.append({
+                        'dn': dirn['pattern'] if dirn is not None else '',
+                        'order': member['lineSelectionOrder'] if member['lineSelectionOrder'] is not None else ''
+                    })
+
+            result['success'] = True
+            result['response'] = {
+                'name': lg['name'],
+                'uuid': lg['uuid'],
+                'member_count': len(members),
+                'members': members
+            }
+        except Fault as error:
+            result['error'] = error.message
+        except Exception as error:
+            result['error'] = str(error)
+
+        result = serialize_object(result)
+        return result
+
+
+    def list_hunt_lists(self):
+        """
+        Get list of all Hunt Lists using AXL API
+        :return: result dictionary with list of hunt lists
+        """
+        result = {
+            'success': False,
+            'response': [],
+            'error': '',
+        }
+
+        try:
+            list_result = self.service.listHuntList(
+                searchCriteria={'name': '%'},
+                returnedTags={'name': '', 'uuid': ''}
+            )
+
+            hunt_lists = []
+            if list_result['return'] is not None:
+                hls = list_result['return']['huntList']
+                if hls:
+                    if not isinstance(hls, list):
+                        hls = [hls]
+                    for hl in hls:
+                        hl_dict = serialize_object(hl)
+                        hunt_lists.append({
+                            'name': hl_dict.get('name'),
+                            'uuid': hl_dict.get('uuid')
+                        })
+
+            result['success'] = True
+            result['response'] = hunt_lists
+        except Fault as error:
+            result['error'] = error.message
+        except Exception as error:
+            result['error'] = str(error)
+
+        result = serialize_object(result)
+        return result
+
+
+    def get_hunt_list(self, name):
+        """
+        Get details of a specific Hunt List using AXL API
+        :param name: Hunt List name
+        :return: result dictionary with hunt list details
+        """
+        result = {
+            'success': False,
+            'response': {},
+            'error': '',
+        }
+
+        try:
+            get_result = self.service.getHuntList(name=name)
+
+            if get_result['return'] is None:
+                result['error'] = 'Hunt List not found'
+                result = serialize_object(result)
+                return result
+
+            hl = get_result['return']['huntList']
+            if not hl:
+                result['error'] = 'Hunt List not found'
+                result = serialize_object(result)
+                return result
+
+            members = []
+            members_container = hl.members if hasattr(hl, 'members') else None
+            if members_container is not None and hasattr(members_container, 'member') and members_container.member is not None:
+                member_data = members_container.member
+                if not isinstance(member_data, list):
+                    member_data = [member_data]
+                for member in member_data:
+                    lg_name = self._extract_fk_value(member.lineGroupName)
+                    members.append({
+                        'line_group': lg_name,
+                        'order': member.selectionOrder if hasattr(member, 'selectionOrder') and member.selectionOrder is not None else ''
+                    })
+
+            result['success'] = True
+            result['response'] = {
+                'name': hl.name,
+                'uuid': hl.uuid,
+                'member_count': len(members),
+                'members': members
+            }
+        except Fault as error:
+            result['error'] = error.message
+        except Exception as error:
+            result['error'] = str(error)
+
+        result = serialize_object(result)
+        return result
+
+
+    def find_hunt_lists_by_line_group(self, lg_name):
+        """
+        Find all Hunt Lists that reference a specific Line Group
+        :param lg_name: Line Group name
+        :return: result dictionary with list of hunt lists
+        """
+        result = {
+            'success': False,
+            'response': [],
+            'error': '',
+        }
+
+        try:
+            query = f"""
+            SELECT DISTINCT rl.pkid as pkid, d.name as name
+            FROM routelist rl
+            JOIN device d ON rl.fkdevice = d.pkid
+            JOIN linegroup lg ON rl.fklinegroup = lg.pkid
+            WHERE lg.name = '{lg_name}'
+            ORDER BY d.name
+            """
+            query_result = self.execute_sql_query(query)
+
+            if not query_result.get('success'):
+                result['error'] = query_result.get('error', 'SQL query failed')
+                result = serialize_object(result)
+                return result
+
+            fields = query_result.get('response')
+            rows = self._reconstruct_rows(fields, 2) if fields else []
+            result['success'] = True
+            result['response'] = rows
+        except Fault as error:
+            result['error'] = error.message
+        except Exception as error:
+            result['error'] = str(error)
+
+        result = serialize_object(result)
+        return result
+
+
+    def find_hunt_pilots_by_hunt_list(self, hl_name):
+        """
+        Find all Hunt Pilots that reference a specific Hunt List
+        :param hl_name: Hunt List name
+        :return: result dictionary with list of hunt pilots
+        """
+        result = {
+            'success': False,
+            'response': [],
+            'error': '',
+        }
+
+        try:
+            query = f"""
+            SELECT DISTINCT np.pkid as pkid, np.dnorpattern as name
+            FROM numplan np
+            JOIN devicenumplanmap dnpm ON dnpm.fknumplan = np.pkid
+            JOIN device d ON dnpm.fkdevice = d.pkid
+            WHERE d.name = '{hl_name}' AND np.tkpatternusage = 7
+            ORDER BY np.dnorpattern
+            """
+            query_result = self.execute_sql_query(query)
+
+            if not query_result.get('success'):
+                result['error'] = query_result.get('error', 'SQL query failed')
+                result = serialize_object(result)
+                return result
+
+            fields = query_result.get('response')
+            rows = self._reconstruct_rows(fields, 2) if fields else []
+            result['success'] = True
+            result['response'] = rows
+        except Fault as error:
+            result['error'] = error.message
+        except Exception as error:
+            result['error'] = str(error)
+
+        result = serialize_object(result)
+        return result
+
+
+    def find_hunt_list_dependencies(self, hl_name):
+        """
+        Find all references to a Hunt List besides Hunt Pilots
+        :param hl_name: Hunt List name
+        :return: result dictionary with list of dependencies
+        """
+        result = {
+            'success': False,
+            'response': [],
+            'error': '',
+        }
+
+        try:
+            hl_query = f"""
+            SELECT rl.pkid as pkid
+            FROM routelist rl
+            JOIN device d ON rl.fkdevice = d.pkid
+            WHERE d.name = '{hl_name}'
+            """
+            hl_result = self.execute_sql_query(hl_query)
+
+            if not hl_result.get('success') or not hl_result.get('response'):
+                result['success'] = True
+                result['response'] = []
+                result = serialize_object(result)
+                return result
+
+            # A Hunt List's device row can only be consumed by Hunt Pilots (checked separately
+            # via find_hunt_pilots_by_hunt_list); this schema has no other FK pointing at it.
+            result['success'] = True
+            result['response'] = []
+        except Fault as error:
+            result['error'] = error.message
+        except Exception as error:
+            result['error'] = str(error)
+
+        result = serialize_object(result)
+        return result
+
+
+    def delete_line_group(self, name):
+        """
+        Delete a Line Group by name
+        :param name: Line Group name
+        :return: result dictionary
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+        try:
+            self.service.removeLineGroup(name=name)
+            result['success'] = True
+            result['response'] = f'Line Group "{name}" deleted successfully'
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        except Exception as error:
+            result['response'] = 'ERROR'
+            result['error'] = str(error)
+        result = serialize_object(result)
+        return result
+
+
+    def delete_hunt_list(self, name):
+        """
+        Delete a Hunt List by name
+        :param name: Hunt List name
+        :return: result dictionary
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+        try:
+            self.service.removeHuntList(name=name)
+            result['success'] = True
+            result['response'] = f'Hunt List "{name}" deleted successfully'
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        except Exception as error:
+            result['response'] = 'ERROR'
+            result['error'] = str(error)
+        result = serialize_object(result)
+        return result
+
+
+    def list_hunt_pilots(self):
+        """
+        Get list of all Hunt Pilots using AXL API
+        :return: result dictionary with list of hunt pilots
+        """
+        result = {
+            'success': False,
+            'response': [],
+            'error': '',
+        }
+
+        try:
+            list_result = self.service.listHuntPilot(
+                searchCriteria={'pattern': '%'},
+                returnedTags={'pattern': '', 'uuid': '', 'huntListName': '', 'description': '', 'routePartitionName': ''}
+            )
+
+            hunt_pilots = []
+            if list_result['return'] is not None:
+                hps = list_result['return']['huntPilot']
+                if hps:
+                    if not isinstance(hps, list):
+                        hps = [hps]
+                    for hp in hps:
+                        hp_dict = serialize_object(hp)
+                        hunt_list_raw = hp_dict.get('huntListName', '')
+                        hunt_list = self._extract_fk_value(hunt_list_raw)
+                        partition_raw = hp_dict.get('routePartitionName', '')
+                        partition = self._extract_fk_value(partition_raw)
+                        hunt_pilots.append({
+                            'pattern': hp_dict.get('pattern'),
+                            'uuid': hp_dict.get('uuid'),
+                            'huntListName': hunt_list,
+                            'routePartitionName': partition
+                        })
+
+            result['success'] = True
+            result['response'] = hunt_pilots
+        except Fault as error:
+            result['error'] = error.message
+        except Exception as error:
+            result['error'] = str(error)
+
+        result = serialize_object(result)
+        return result
+
+
+    def get_hunt_pilot(self, identifier, route_partition=None):
+        """
+        Get details of a specific Hunt Pilot using AXL API
+        :param identifier: Hunt Pilot uuid or pattern
+        :param route_partition: Route partition name (optional, used if identifier is a pattern)
+        :return: result dictionary with hunt pilot details
+        """
+        result = {
+            'success': False,
+            'response': {},
+            'error': '',
+        }
+
+        try:
+            if identifier.startswith('{') or '-' in identifier:
+                get_result = self.service.getHuntPilot(uuid=identifier)
+            else:
+                kwargs = {'pattern': identifier}
+                if route_partition:
+                    kwargs['routePartitionName'] = route_partition
+                get_result = self.service.getHuntPilot(**kwargs)
+
+            if get_result['return'] is None:
+                result['error'] = 'Hunt Pilot not found'
+                result = serialize_object(result)
+                return result
+
+            hp = get_result['return']['huntPilot']
+            if not hp:
+                result['error'] = 'Hunt Pilot not found'
+                result = serialize_object(result)
+                return result
+
+            hunt_list_name = hp.huntListName if hasattr(hp, 'huntListName') else ''
+            hunt_list = self._extract_fk_value(hunt_list_name) if hunt_list_name else ''
+
+            result['success'] = True
+            result['response'] = {
+                'pattern': hp.pattern,
+                'uuid': hp.uuid,
+                'huntListName': hunt_list,
+                'description': hp.description if hasattr(hp, 'description') else ''
+            }
+        except Fault as error:
+            result['error'] = error.message
+        except Exception as error:
+            result['error'] = str(error)
+
+        result = serialize_object(result)
+        return result
+
+
+    def delete_hunt_pilot(self, uuid, name=''):
+        """
+        Delete a Hunt Pilot by uuid
+        :param uuid: Hunt Pilot uuid
+        :param name: Hunt Pilot name/pattern (used only for the response message)
+        :return: result dictionary
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+        try:
+            self.service.removeHuntPilot(uuid=uuid)
+            result['success'] = True
+            result['response'] = f'Hunt Pilot "{name or uuid}" deleted successfully'
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        except Exception as error:
+            result['response'] = 'ERROR'
+            result['error'] = str(error)
+        result = serialize_object(result)
+        return result
