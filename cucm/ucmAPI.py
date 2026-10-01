@@ -2174,6 +2174,201 @@ class AXL(object):
         return result
 
 
+    def list_device_pools_sql(self):
+        """
+        Get List of Device Pools with names and UUIDs
+        Queries devicepool table to get both pkid and name
+        :return: A list of dictionaries with names and UUIDs
+        """
+        result = {
+            'success': False,
+            'response': [],
+            'error': '',
+        }
+
+        query = "SELECT pkid, name FROM devicepool ORDER BY name"
+        query_result = self.execute_sql_query(query)
+
+        if not query_result.get('success'):
+            result['success'] = False
+            result['error'] = query_result.get('error', 'Unknown error executing SQL query')
+            result = serialize_object(result)
+            return result
+
+        fields = query_result.get('response')
+        result['success'] = True
+        result['response'] = self._reconstruct_rows(fields, 2) if fields else []
+        result = serialize_object(result)
+        return result
+
+
+    def find_device_pool_dependencies(self, dp_name):
+        """
+        Find all references to a Device Pool using SQL query
+        :param dp_name: Device Pool name
+        :return: result dictionary with list of devices/device profiles/remote destination profiles
+            using this device pool, plus Route Groups whose member devices use it
+        """
+        result = {
+            'success': False,
+            'response': [],
+            'error': '',
+        }
+
+        all_dependencies = []
+
+        # Tables that reference devicepool via fkdevicepool
+        tables_to_check = [
+            ('device', 'Device'),
+            ('deviceprofile', 'Device Profile'),
+            ('remotedestinationprofile', 'Remote Destination Profile'),
+        ]
+
+        device_names = []
+        for table_name, type_name in tables_to_check:
+            try:
+                query = f"""
+                SELECT DISTINCT {table_name}.name as name, '{type_name}' as type
+                FROM {table_name}
+                INNER JOIN devicepool ON {table_name}.fkdevicepool = devicepool.pkid
+                WHERE devicepool.name = '{dp_name}'
+                ORDER BY name
+                """
+                query_result = self.execute_sql_query(query)
+                if query_result.get('success') and query_result.get('response'):
+                    fields = query_result.get('response')
+                    rows = self._reconstruct_rows(fields, 2)
+                    all_dependencies.extend(rows)
+                    if table_name == 'device':
+                        device_names.extend(row.get('name') for row in rows if row.get('name'))
+            except Fault:
+                pass
+
+        if device_names:
+            route_groups = self._find_route_groups_by_device_names(device_names)
+            all_dependencies.extend(route_groups)
+
+        result['success'] = True
+        result['response'] = all_dependencies
+        result = serialize_object(result)
+        return result
+
+
+    def _find_route_groups_by_device_names(self, device_names):
+        """
+        Find Route Groups that contain any of the given device names as members
+        :param device_names: list of device names (e.g. gateways/trunks)
+        :return: list of dependency dicts [{'name': <route group name>, 'type': 'Route Group'}]
+        """
+        matches = []
+        device_name_set = set(device_names)
+
+        rg_list = self.list_route_groups()
+        if not rg_list.get('success'):
+            return matches
+
+        for rg in rg_list.get('response', []):
+            rg_name = rg.get('name')
+            if not rg_name:
+                continue
+            rg_detail = self.get_route_group(rg_name)
+            if not rg_detail.get('success'):
+                continue
+            member_devices = rg_detail.get('response', {}).get('member_devices', [])
+            if device_name_set.intersection(member_devices):
+                matches.append({'name': rg_name, 'type': 'Route Group'})
+
+        return matches
+
+
+    def list_route_groups(self):
+        """
+        Get list of all Route Groups using AXL API
+        :return: result dictionary with list of route groups
+        """
+        result = {
+            'success': False,
+            'response': [],
+            'error': '',
+        }
+
+        try:
+            list_result = self.service.listRouteGroup(
+                searchCriteria={'name': '%'},
+                returnedTags={'name': ''}
+            )
+
+            route_groups = []
+            if list_result['return'] is not None:
+                rgs = list_result['return']['routeGroup']
+                if rgs:
+                    if not isinstance(rgs, list):
+                        rgs = [rgs]
+                    for rg in rgs:
+                        route_groups.append({'name': rg['name']})
+
+            result['success'] = True
+            result['response'] = route_groups
+        except Fault as error:
+            result['error'] = error.message
+        except Exception as error:
+            result['error'] = str(error)
+
+        result = serialize_object(result)
+        return result
+
+
+    def get_route_group(self, name):
+        """
+        Get details of a specific Route Group using AXL API
+        :param name: Route Group name
+        :return: result dictionary with route group member device names
+        """
+        result = {
+            'success': False,
+            'response': {},
+            'error': '',
+        }
+
+        try:
+            get_result = self.service.getRouteGroup(name=name)
+
+            if get_result['return'] is None:
+                result['error'] = 'Route Group not found'
+                result = serialize_object(result)
+                return result
+
+            rg = get_result['return']['routeGroup']
+            if not rg:
+                result['error'] = 'Route Group not found'
+                result = serialize_object(result)
+                return result
+
+            member_devices = []
+            members_container = rg.members if hasattr(rg, 'members') else None
+            if members_container is not None and hasattr(members_container, 'member') and members_container.member is not None:
+                member_data = members_container.member
+                if not isinstance(member_data, list):
+                    member_data = [member_data]
+                for member in member_data:
+                    device_name = self._extract_fk_value(member.deviceName)
+                    if device_name:
+                        member_devices.append(device_name)
+
+            result['success'] = True
+            result['response'] = {
+                'name': rg.name,
+                'member_devices': member_devices
+            }
+        except Fault as error:
+            result['error'] = error.message
+        except Exception as error:
+            result['error'] = str(error)
+
+        result = serialize_object(result)
+        return result
+
+
     def find_common_device_config_dependencies(self, cdc_name):
         """
         Find all references to a Common Device Configuration using SQL query
