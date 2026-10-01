@@ -108,7 +108,7 @@ def checkForData(data):
 # Begin Script
 print('This script requires two inputs:')
 print('    1. An access token used to authorize the API calls\n       (You can get yours from https://developer.webex.com/docs/api/getting-started)\n')
-print('    2. The full file path on your device for an input CSV file\n       (ex: C:\\Scripts\huntAgents.csv on Windows or ~/Scripts/huntAgents.csv on Mac)\n')
+print('    2. The full file path on your device for an input CSV file\n       (ex: C:\\Scripts\\huntAgents.csv on Windows or ~/Scripts/huntAgents.csv on Mac)\n')
 
 
 # Loop to allow the user to input an access token until successful.
