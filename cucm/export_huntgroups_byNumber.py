@@ -39,7 +39,7 @@ from setup.logger import setup_logger
 from setup.prompt_utils import prompt_yes_no
 from setup.multi_object_loader import get_object_for_single_operation, load_credentials, get_objects_for_multi_operation, load_credentials_for_multi_objects
 from ucmAPI import AXL
-from export_hunt_groups import write_csv, _sort_key
+from export_hunt_groups import write_csv, _sort_key, lg_settings_row
 
 
 def _norm(number):
@@ -120,11 +120,12 @@ def collect_hunt_rows(axl, numbers, logger):
                         logger.error('get_line_group failed for %s: %s', lg_name, lg_result.get('error'))
                     lg_cache[lg_name] = lg_result.get('response', {}) if lg_result.get('success') else {}
                 lg_members = sorted(lg_cache[lg_name].get('members', []), key=_sort_key)
+                lg_settings = lg_settings_row(lg_cache[lg_name])
                 dns = [m['dn'] for m in lg_members]
                 hits = {_norm(dn) for dn in dns} & numbers
                 matched_numbers |= hits
                 if pilot_match or hits:
-                    line_groups.append((lg_name, dns))
+                    line_groups.append((lg_name, dns, lg_settings))
 
         if not pilot_match and not line_groups:
             continue
@@ -151,11 +152,11 @@ def collect_hunt_rows(axl, numbers, logger):
             rows.append({**base, 'LineGroup': '', 'members': []})
             continue
 
-        for i, (lg_name, members) in enumerate(line_groups):
+        for i, (lg_name, members, lg_settings) in enumerate(line_groups):
             if i == 0:
-                rows.append({**base, 'LineGroup': lg_name, 'members': members})
+                rows.append({**base, 'LineGroup': lg_name, **lg_settings, 'members': members})
             else:
-                rows.append({'Pilot': base['Pilot'], 'HuntList': hl_name, 'LineGroup': lg_name, 'members': members})
+                rows.append({'Pilot': base['Pilot'], 'HuntList': hl_name, 'LineGroup': lg_name, **lg_settings, 'members': members})
 
     missing = sorted(numbers - matched_numbers)
     if missing:

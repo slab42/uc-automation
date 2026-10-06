@@ -8,7 +8,9 @@ Connects to CUCM, retrieves all Hunt Pilots with their settings, the Hunt List
 each one uses, and the Line Groups (with members) in that Hunt List. A Hunt Pilot
 whose Hunt List has more than one Line Group gets one row per Line Group: the first
 row carries the Hunt Pilot settings, and the following rows repeat only the Hunt
-Pilot, Hunt List and Line Group columns.
+Pilot, Hunt List and Line Group columns. Every row carries the Line Group's own
+settings (RNA reversion timeout, distribution algorithm, and the hunt options for
+No Answer, Busy and Not Available).
 
 One CSV is written per cluster to _DATA/reports/ with the cluster name and a
 timestamp in the filename.
@@ -18,7 +20,7 @@ Supports single or multiple CUCM clusters
 CSV Output Format:
 Pilot, Partition, Description, Alerting Name, ForwardNoAnswer, ForwardBusy, QueueCalls,
 MaxNumberInQueue, WhenIsFull, MaxWaitTime, WhenMaxWaitIsMet, NoHuntMembers, HuntList,
-LineGroup, LineGroupMember1, LineGroupMember2, ... (as many as the largest Line Group)
+LineGroup, RNA, Distribution, HuntNoAnswer, HuntBusy, HuntNotAvail, LineGroupMember1, LineGroupMember2, ... (as many as the largest Line Group)
 
 Arguments:
   --debug   Enable debug-level console logging (default: info level)
@@ -42,7 +44,8 @@ from ucmAPI import AXL
 
 BASE_HEADERS = ['Pilot', 'Partition', 'Description', 'Alerting Name', 'ForwardNoAnswer', 'ForwardBusy',
                 'QueueCalls', 'MaxNumberInQueue', 'WhenIsFull', 'MaxWaitTime', 'WhenMaxWaitIsMet',
-                'NoHuntMembers', 'HuntList', 'LineGroup']
+                'NoHuntMembers', 'HuntList', 'LineGroup', 'RNA', 'Distribution', 'HuntNoAnswer', 'HuntBusy',
+                'HuntNotAvail']
 
 
 def _sort_key(item):
@@ -51,6 +54,17 @@ def _sort_key(item):
         return int(item.get('order'))
     except (TypeError, ValueError):
         return 10**6
+
+
+def lg_settings_row(lg):
+    """Map a Line Group's settings to the export columns"""
+    return {
+        'RNA': lg.get('rna_timeout', ''),
+        'Distribution': lg.get('distribution', ''),
+        'HuntNoAnswer': lg.get('hunt_no_answer', ''),
+        'HuntBusy': lg.get('hunt_busy', ''),
+        'HuntNotAvail': lg.get('hunt_not_available', ''),
+    }
 
 
 def collect_hunt_rows(axl, logger):
@@ -98,7 +112,8 @@ def collect_hunt_rows(axl, logger):
                         logger.error('get_line_group failed for %s: %s', lg_name, lg_result.get('error'))
                     lg_cache[lg_name] = lg_result.get('response', {}) if lg_result.get('success') else {}
                 lg_members = sorted(lg_cache[lg_name].get('members', []), key=_sort_key)
-                line_groups.append((lg_name, [m['dn'] for m in lg_members]))
+                lg_settings = lg_settings_row(lg_cache[lg_name])
+                line_groups.append((lg_name, [m['dn'] for m in lg_members], lg_settings))
 
         base = {
             'Pilot': d['pattern'],
@@ -122,11 +137,11 @@ def collect_hunt_rows(axl, logger):
             rows.append({**base, 'LineGroup': '', 'members': []})
             continue
 
-        for i, (lg_name, members) in enumerate(line_groups):
+        for i, (lg_name, members, lg_settings) in enumerate(line_groups):
             if i == 0:
-                rows.append({**base, 'LineGroup': lg_name, 'members': members})
+                rows.append({**base, 'LineGroup': lg_name, **lg_settings, 'members': members})
             else:
-                rows.append({'Pilot': base['Pilot'], 'HuntList': hl_name, 'LineGroup': lg_name, 'members': members})
+                rows.append({'Pilot': base['Pilot'], 'HuntList': hl_name, 'LineGroup': lg_name, **lg_settings, 'members': members})
 
     return rows
 

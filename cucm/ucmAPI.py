@@ -4001,6 +4001,11 @@ class AXL(object):
             result['response'] = {
                 'name': lg['name'],
                 'uuid': lg['uuid'],
+                'rna_timeout': lg['rnaReversionTimeOut'],
+                'distribution': lg['distributionAlgorithm'],
+                'hunt_no_answer': lg['huntAlgorithmNoAnswer'],
+                'hunt_busy': lg['huntAlgorithmBusy'],
+                'hunt_not_available': lg['huntAlgorithmNotAvailable'],
                 'member_count': len(members),
                 'members': members
             }
