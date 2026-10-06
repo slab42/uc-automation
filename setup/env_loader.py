@@ -96,7 +96,7 @@ class CredentialsLoader:
         # Return specific cluster
         section = f"CUCM:{cluster_name}"
         if self.config.has_section(section):
-            return self._get_section_as_dict(section, cluster_name, prompt_password=True)
+            return self._get_section_as_dict(section, cluster_name)
         return None
 
     def get_cuc_credentials(self, cluster_name=None):
@@ -118,7 +118,7 @@ class CredentialsLoader:
 
         section = f"CUC:{cluster_name}"
         if self.config.has_section(section):
-            return self._get_section_as_dict(section, cluster_name, prompt_password=True)
+            return self._get_section_as_dict(section, cluster_name)
         return None
 
     def get_cube_credentials(self, device_name=None):
@@ -140,7 +140,7 @@ class CredentialsLoader:
 
         section = f"CUBE:{device_name}"
         if self.config.has_section(section):
-            return self._get_section_as_dict(section, device_name, prompt_password=True)
+            return self._get_section_as_dict(section, device_name)
         return None
 
     def get_webex_credentials(self, cluster_name=None):
@@ -165,20 +165,14 @@ class CredentialsLoader:
             return self._get_section_as_dict(section, cluster_name)
         return None
 
-    def _get_section_as_dict(self, section, identifier, prompt_password=False):
-        """Convert a config section to a dictionary, optionally prompting for password."""
+    def _get_section_as_dict(self, section, identifier):
+        """Convert a config section to a dictionary. Blank passwords stay blank; callers prompt."""
         creds = {}
         for key, value in self.config.items(section):
             creds[key] = value
 
         # Add identifier for reference
         creds['identifier'] = identifier
-
-        # If password is blank and we should prompt, ask user
-        if prompt_password and 'password' in creds and not creds['password']:
-            service_type = section.split(':')[0]
-            prompt_text = f"Enter password for {service_type} '{identifier}': "
-            creds['password'] = getpass.getpass(prompt_text)
 
         return creds
 
