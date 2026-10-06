@@ -4380,6 +4380,60 @@ class AXL(object):
         return result
 
 
+    def get_hunt_pilot_details(self, uuid):
+        """
+        Get Hunt Pilot settings (alerting name, forwarding, queueing) by uuid
+        :param uuid: Hunt Pilot uuid
+        :return: result dictionary with hunt pilot details
+        """
+        result = {
+            'success': False,
+            'response': {},
+            'error': '',
+        }
+
+        try:
+            get_result = self.service.getHuntPilot(uuid=uuid)
+            hp = get_result['return']['huntPilot'] if get_result['return'] is not None else None
+            if not hp:
+                result['error'] = 'Hunt Pilot not found'
+                result = serialize_object(result)
+                return result
+
+            hp = serialize_object(hp)
+
+            def forward(key):
+                fwd = hp.get(key) or {}
+                dest = fwd.get('destination') or ''
+                if fwd.get('usePersonalPreferences'):
+                    return 'Personal Preferences'
+                return dest
+
+            queue = hp.get('queueCalls') or {}
+            result['success'] = True
+            result['response'] = {
+                'pattern': hp.get('pattern') or '',
+                'description': hp.get('description') or '',
+                'alertingName': hp.get('alertingName') or '',
+                'huntListName': self._extract_fk_value(hp.get('huntListName')) or '',
+                'forwardHuntNoAnswer': forward('forwardHuntNoAnswer'),
+                'forwardHuntBusy': forward('forwardHuntBusy'),
+                'queueEnabled': bool(queue.get('maxCallersInQueue')),
+                'maxCallersInQueue': queue.get('maxCallersInQueue') or '',
+                'queueFullDestination': queue.get('queueFullDestination') or '',
+                'maxWaitTimeInQueue': queue.get('maxWaitTimeInQueue') or '',
+                'maxWaitTimeDestination': queue.get('maxWaitTimeDestination') or '',
+                'noAgentDestination': queue.get('noAgentDestination') or '',
+            }
+        except Fault as error:
+            result['error'] = error.message
+        except Exception as error:
+            result['error'] = str(error)
+
+        result = serialize_object(result)
+        return result
+
+
     def delete_hunt_pilot(self, uuid, name=''):
         """
         Delete a Hunt Pilot by uuid
