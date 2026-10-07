@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# TITLE: Remediate Duplicate RPs
+# TITLE: RPs Remediate Duplicate
 
 """
 Remediate Duplicate-ish Route Patterns in CUCM

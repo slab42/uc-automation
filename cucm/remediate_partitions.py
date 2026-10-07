@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# TITLE: Remediate Partitions
+# TITLE: Partitions Remediate
 
 """
 Remediate Partitions - List and Delete Without Dependencies

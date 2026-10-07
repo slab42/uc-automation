@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# TITLE: Remediate Device Pools
+# TITLE: Device Pools Remediate
 
 """
 Remediate Device Pools - List Dependencies and Delete Without Dependencies

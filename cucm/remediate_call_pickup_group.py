@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# TITLE: Remediate Call Pickup Group
+# TITLE: Call Pickup Group Remediate
 
 """
 Remediate Call Pickup Group - List and Delete Without Dependencies

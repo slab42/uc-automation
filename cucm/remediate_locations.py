@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# TITLE: Remediate Locations
+# TITLE: Locations Remediate
 
 """
 Remediate Locations - List and Delete Without Dependencies

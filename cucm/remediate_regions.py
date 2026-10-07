@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# TITLE: Remediate Regions
+# TITLE: Regions Remediate
 
 """
 Remediate Regions - List and Delete Without Dependencies

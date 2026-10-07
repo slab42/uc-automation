@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# TITLE: Delete Softkey Templates
+# TITLE: Softkey Templates Delete
 
 """
 Delete Softkey Templates from CSV

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# TITLE: Compare Advertised vs Route Patterns
+# TITLE: Advertised Patterns Compare vs Route Patterns
 
 """
 Compare Advertised Patterns with Route Patterns in CUCM

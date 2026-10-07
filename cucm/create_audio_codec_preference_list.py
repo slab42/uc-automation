@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# TITLE: Create Codec Preference List
+# TITLE: Codec Preference List Create
 
 """
 Create Audio Codec Preference List individually or from a list in CSV

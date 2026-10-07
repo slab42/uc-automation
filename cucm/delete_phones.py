@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# TITLE: Delete Phones And Orphan DNs
+# TITLE: Phones Delete And Orphan DNs
 
 """
 Delete Phones and their Orphaned Directory Numbers

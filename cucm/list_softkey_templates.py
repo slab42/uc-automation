@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# TITLE: List Softkey Templates
+# TITLE: Softkey Templates List
 
 """
 List Softkey Templates and their dependencies

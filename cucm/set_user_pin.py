@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# TITLE: Set User PIN
+# TITLE: User Set PIN
 
 """
 Set User PIN Script

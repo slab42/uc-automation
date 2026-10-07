@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# TITLE: Update Phone Load Server
 
 """
 Update phone Load Server in CUCM to cloudupgrader.webex.com

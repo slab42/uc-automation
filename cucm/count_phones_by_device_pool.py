@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# TITLE: Count Phones by Device Pool
+# TITLE: Phones Count by Device Pool
 
 """
 Count phones (devices) in CUCM grouped by Device Pool.

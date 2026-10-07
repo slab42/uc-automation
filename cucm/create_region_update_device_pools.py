@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# TITLE: Create Region and update Device Pools
+# TITLE: Region Create and update Device Pools
 
 """
 Create a Region with Audio Codec Preference List and Max Audio Bit Rate

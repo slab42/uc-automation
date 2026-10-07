@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# TITLE: Remediate Softkey Templates
+# TITLE: Softkey Templates Remediate
 
 """
 Remediate Softkey Templates - List and Delete Without Dependencies

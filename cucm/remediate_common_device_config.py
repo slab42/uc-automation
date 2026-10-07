@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# TITLE: Remediate Common Device Config
+# TITLE: Common Device Config Remediate
 
 """
 Remediate Common Device Configuration - List and Delete Without Dependencies

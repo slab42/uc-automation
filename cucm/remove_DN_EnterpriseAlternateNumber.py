@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# TITLE: Remove DN Enterprise Alt Number
+# TITLE: DN Remove Enterprise Alt Number
 
 """
 Script checks if the DN is valid. If so then it removes Enterprise Alternate Number whether it is set or not.

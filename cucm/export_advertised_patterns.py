@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# TITLE: Export Advertised Patterns
+# TITLE: Advertised Patterns Export
 
 """
 Export Advertised Patterns from CUCM to a CSV file

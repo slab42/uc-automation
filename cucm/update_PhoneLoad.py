@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# TITLE: Update Phone Load
 
 """
 Update phone load on phones in CUCM based on phone model.

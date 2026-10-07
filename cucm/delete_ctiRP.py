@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# TITLE: Delete CTI Route Points And DNs
+# TITLE: CTI Route Points Delete And DNs
 
 """
 Delete CTI Route Points and their Orphaned Directory Numbers

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# TITLE: Move DN Partition
+# TITLE: DN Move Partition
 
 """
 Move existing Directory Numbers to a different Route Partition,
