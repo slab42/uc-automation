@@ -1201,6 +1201,53 @@ class AXL(object):
         return result
 
 
+    def find_cti_route_point_lines(self, identifier):
+        """
+        Find CTI Route Points by device name or by a directory number on them (SQL)
+        :param identifier: CTI Route Point name or directory number (exact match)
+        :return: result dictionary; response is a list of {'name', 'pattern', 'partition'}
+            (one row per line of every matching CTI Route Point; pattern/partition empty
+            if it has no lines). Empty list if nothing matches.
+        """
+        result = {
+            'success': False,
+            'response': [],
+            'error': '',
+        }
+        safe_id = identifier.replace("'", "''")
+        try:
+            # CTI Route Points are identified by model name to avoid hard-coding enum values
+            query = f"""
+            SELECT d.name AS name, n.dnorpattern AS pattern, rp.name AS partition
+            FROM device d
+            LEFT JOIN devicenumplanmap m ON m.fkdevice = d.pkid
+            LEFT JOIN numplan n ON n.pkid = m.fknumplan
+            LEFT JOIN routepartition rp ON rp.pkid = n.fkroutepartition
+            INNER JOIN typemodel tm ON tm.enum = d.tkmodel
+            WHERE tm.name = 'CTI Route Point'
+            AND (d.name = '{safe_id}' OR d.pkid IN (
+                SELECT m2.fkdevice FROM devicenumplanmap m2
+                INNER JOIN numplan n2 ON n2.pkid = m2.fknumplan
+                WHERE n2.dnorpattern = '{safe_id}'))
+            ORDER BY d.name, m.numplanindex
+            """
+            query_result = self.execute_sql_query(query)
+            if not query_result.get('success'):
+                result['error'] = query_result.get('error')
+                return serialize_object(result)
+            rows = self._reconstruct_rows(query_result.get('response'), 3)
+            result['success'] = True
+            result['response'] = [{
+                'name': r.get('name') or '',
+                'pattern': r.get('pattern') or '',
+                'partition': r.get('partition') or '',
+            } for r in rows]
+        except Fault as error:
+            result['error'] = error.message
+        result = serialize_object(result)
+        return result
+
+
     def find_line_devices(self, pattern, partition):
         """
         Find all devices/device profiles/remote destination profiles that use a DN (SQL)
