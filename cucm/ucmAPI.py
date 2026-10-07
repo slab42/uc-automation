@@ -5,6 +5,7 @@ Class of API calls to a Cisco Call Manager
 
 """
 
+from typing import Any
 from zeep import Client, Settings
 from zeep.cache import SqliteCache
 from zeep.transports import Transport
@@ -23,7 +24,7 @@ class AXL(object):
     The AXL class sets up the connection to the call manager with methods for configuring UCM.
     """
 
-    def __init__(self, username, password, wsdl, cucm, cucm_version):
+    def __init__(self, username, password, wsdl, cucm, cucm_version) -> dict[str, Any]:
         """
         :param username: axl username
         :param password: axl password
@@ -48,7 +49,7 @@ class AXL(object):
         self.service = self.client.create_service('{http://www.cisco.com/AXLAPIService/}AXLAPIBinding', 'https://{0}:8443/axl/'.format(cucm))
 
 
-    def add_advertised_patterns(self, **kwargs):
+    def add_advertised_patterns(self, **kwargs) -> dict[str, Any]:
         """Add Advertised Patterns
         :param description: Description of Patter
         :param pattern: Pattern String
@@ -74,7 +75,7 @@ class AXL(object):
         return result
 
 
-    def remove_advertised_patterns(self, pattern):
+    def remove_advertised_patterns(self, pattern) -> dict[str, Any]:
         """Remove Advertised Pattern
         :param pattern: Pattern String
         :return result dictionary
@@ -95,7 +96,7 @@ class AXL(object):
         return result
 
 
-    def list_advertised_patterns(self):
+    def list_advertised_patterns(self) -> dict[str, Any]:
         """List all Advertised Patterns
         :return: result dictionary with list of advertised patterns
         """
@@ -128,7 +129,7 @@ class AXL(object):
         return result
 
 
-    def add_audio_codec_preference_list(self, name, codec_list, description=''):
+    def add_audio_codec_preference_list(self, name, codec_list, description='') -> dict[str, Any]:
         """Add Audio Codec Preference List
         :param name: Name of the codec preference list
         :param codec_list: List of codecs in priority order
@@ -514,7 +515,7 @@ class AXL(object):
         return result
 
 
-    def add_Physical_Location(self, name='', description=''):
+    def add_Physical_Location(self, name='', description='') -> dict[str, Any]:
         """
         Add a physical location
         :param name: Name of the physical to add
@@ -543,7 +544,7 @@ class AXL(object):
         return result
 
 
-    def add_Region(self, region, codec_preference_list='', max_audio_bit_rate=''):
+    def add_Region(self, region, codec_preference_list='', max_audio_bit_rate='') -> dict[str, Any]:
         """
         Add a region
         :param region: Name of the region to add
@@ -574,7 +575,7 @@ class AXL(object):
         return result
 
     
-    def add_Media_Resource_Group_List(self, name, members=[]):
+    def add_Media_Resource_Group_List(self, name, members=[]) -> dict[str, Any]:
         """
         Add a media resource group list
         :param name: Media resource group list name
@@ -607,7 +608,7 @@ class AXL(object):
         return result
 
 
-    def do_DeviceLogin (self, deviceName, loginDuration, profileName, userId):
+    def do_DeviceLogin (self, deviceName, loginDuration, profileName, userId) -> dict[str, Any]:
         """
         Do Device Login
         :param deviceName:
@@ -631,7 +632,7 @@ class AXL(object):
         return result
 
 
-    def debug_get_phone(self, device_name):
+    def debug_get_phone(self, device_name) -> dict[str, Any]:
         """
         Debug method to see full phone object structure
         :param device_name: Device name/ID
@@ -643,7 +644,7 @@ class AXL(object):
         except Exception as e:
             return {'error': str(e)}
 
-    def check_device_login(self, device_name):
+    def check_device_login(self, device_name) -> dict[str, Any]:
         """
         Check if a device has a user logged in via Extension Mobility
         :param device_name: Device name/ID (e.g., SEPDC0539FB8FA2)
@@ -703,7 +704,7 @@ class AXL(object):
         result = serialize_object(result)
         return result
 
-    def get_CCMVersion(self):
+    def get_CCMVersion(self) -> dict[str, Any]:
         '''
         Get the version of CUCM. Can be used for connectivity check.
         :return: Full CUCM Version
@@ -731,7 +732,7 @@ class AXL(object):
         return result
     
 
-    def get_Device_Pool(self, name):
+    def get_Device_Pool(self, name) -> dict[str, Any]:
         """
         Get Device Pool Parameters
         :param name: Device Pool to search for
@@ -769,7 +770,7 @@ class AXL(object):
         return result
 
 
-    def get_Line(self, **args):
+    def get_Line(self, **args) -> dict[str, Any]:
         """
         Get Line Parameters
         :param pattern: DN to search for
@@ -814,7 +815,7 @@ class AXL(object):
         return result
     
     
-    def get_MediaResourceList(self, mrgl):
+    def get_MediaResourceList(self, mrgl) -> dict[str, Any]:
         """
         Get Media Resource Group List Memebers
         :param mrgl: MRGL to search for
@@ -842,7 +843,7 @@ class AXL(object):
         return result
 
 
-    def get_Phone(self, **args):
+    def get_Phone(self, **args) -> dict[str, Any]:
         """
         Get device profile parameters
         :param phone: profile name
@@ -864,7 +865,7 @@ class AXL(object):
         return result
 
     
-    def get_User(self, user_id):
+    def get_User(self, user_id) -> dict[str, Any]:
         """
         Get user parameters
         :param user_id: profile name
@@ -886,7 +887,7 @@ class AXL(object):
         return result
 
     
-    def list_Line(self, searchFor, searchString):
+    def list_Line(self, searchFor, searchString) -> dict[str, Any]:
         """
         Get Line Details details
         :return: A list of dictionaries. If > 1000 records are returned, a list of list of dictionaries will be returned
@@ -918,7 +919,7 @@ class AXL(object):
         return result
 
 
-    def list_HuntPilot(self, searchFor, searchString):
+    def list_HuntPilot(self, searchFor, searchString) -> dict[str, Any]:
         """
         Get Hunt Pilot details
         :return: A list of dictionaries. If > 1000 records are returned, a list of list of dictionaries will be returned
@@ -949,7 +950,7 @@ class AXL(object):
         return result
 
 
-    def list_Phone(self):
+    def list_Phone(self) -> dict[str, Any]:
         """
         Get phone details
         :return: A list of dictionaries. If > 1000 records are returned, a list of list of dictionaries will be returned
@@ -981,7 +982,7 @@ class AXL(object):
     
  
 
-    def list_Phone_search_desc(self,searchString):
+    def list_Phone_search_desc(self,searchString) -> dict[str, Any]:
         """
         Get phone details
         :return: A list of dictionaries. If > 1000 records are returned, a list of list of dictionaries will be returned
@@ -1010,7 +1011,7 @@ class AXL(object):
         return result
     
     
-    def remove_Calling_Search_Space(self, name):
+    def remove_Calling_Search_Space(self, name) -> dict[str, Any]:
         """
         Remove a Calling Search Space
         :return: Object ID of removed CSS
@@ -1031,7 +1032,7 @@ class AXL(object):
         return result
 
     
-    def remove_Cti_Route_Point(self, deviceName):
+    def remove_Cti_Route_Point(self, deviceName) -> dict[str, Any]:
         """
         Remove a CTI RP
         :return: Object ID of removed CTI Route Point
@@ -1052,7 +1053,7 @@ class AXL(object):
         return result
 
 
-    def remove_Device_Mobility_Info(self, name):
+    def remove_Device_Mobility_Info(self, name) -> dict[str, Any]:
         """
         Remove a Device Mobility Info Subnet
         :return: Object ID of removed DMI
@@ -1073,7 +1074,7 @@ class AXL(object):
         return result
 
 
-    def remove_Device_Pool(self, name):
+    def remove_Device_Pool(self, name) -> dict[str, Any]:
         """
         Remove a Device Pool
         :return: Object ID of removed DMI
@@ -1094,7 +1095,7 @@ class AXL(object):
         return result
 
 
-    def update_Device_Pool(self, name, region_name):
+    def update_Device_Pool(self, name, region_name) -> dict[str, Any]:
         """
         Update Device Pool region
         :param name: Device pool name
@@ -1117,7 +1118,7 @@ class AXL(object):
         return result
 
 
-    def remove_Line(self, DN, PT):
+    def remove_Line(self, DN, PT) -> dict[str, Any]:
         """
         Remove a DN
         :return: Object ID of removed CTI Route Point
@@ -1138,7 +1139,7 @@ class AXL(object):
         return result
     
 
-    def remove_Phone(self, name):
+    def remove_Phone(self, name) -> dict[str, Any]:
         """
         Remove a phone by device name
         :param name: Phone device name
@@ -1160,7 +1161,7 @@ class AXL(object):
         return result
 
 
-    def find_phone_lines(self, device_name):
+    def find_phone_lines(self, device_name) -> dict[str, Any]:
         """
         Find a phone and its directory numbers (SQL)
         :param device_name: Exact phone device name
@@ -1201,7 +1202,7 @@ class AXL(object):
         return result
 
 
-    def find_cti_route_point_lines(self, identifier):
+    def find_cti_route_point_lines(self, identifier) -> dict[str, Any]:
         """
         Find CTI Route Points by device name or by a directory number on them (SQL)
         :param identifier: CTI Route Point name or directory number (exact match)
@@ -1248,7 +1249,7 @@ class AXL(object):
         return result
 
 
-    def find_line_devices(self, pattern, partition):
+    def find_line_devices(self, pattern, partition) -> dict[str, Any]:
         """
         Find all devices/device profiles/remote destination profiles that use a DN (SQL)
         :param pattern: Directory number
@@ -1288,7 +1289,7 @@ class AXL(object):
         return result
 
 
-    def remove_Location(self, name):
+    def remove_Location(self, name) -> dict[str, Any]:
         """
         Remove a Location
         :return: Object ID of removed DMI
@@ -1309,7 +1310,7 @@ class AXL(object):
         return result
 
 
-    def remove_Media_Resource_Group_List(self, name):
+    def remove_Media_Resource_Group_List(self, name) -> dict[str, Any]:
         """
         Remove a MRGL
         :return: Object ID of removed MRGL
@@ -1330,7 +1331,7 @@ class AXL(object):
         return result
 
 
-    def remove_Physical_Location(self, name):
+    def remove_Physical_Location(self, name) -> dict[str, Any]:
         """
         Remove a Physical Location
         :return: Object ID of removed Physical Location
@@ -1351,7 +1352,7 @@ class AXL(object):
         return result
 
 
-    def remove_Region(self, name):
+    def remove_Region(self, name) -> dict[str, Any]:
         """
         Remove a Region
         :return: Object ID of removed Region
@@ -1372,7 +1373,7 @@ class AXL(object):
         return result
 
 
-    def remove_Route_Partition(self, name):
+    def remove_Route_Partition(self, name) -> dict[str, Any]:
         """
         Remove a Partition
         :return: Object ID of removed Partition
@@ -1393,7 +1394,7 @@ class AXL(object):
         return result
 
 
-    def reset_Phone(self, name):
+    def reset_Phone(self, name) -> dict[str, Any]:
         """
         Reset a phone
         :return: Object ID of phone
@@ -1414,7 +1415,7 @@ class AXL(object):
         return result
 
 
-    def update_Line(self, **args):
+    def update_Line(self, **args) -> dict[str, Any]:
         """Update line
         :param uuid
         :param pattern
@@ -1486,7 +1487,7 @@ class AXL(object):
         return result
 
 
-    def update_TransPattern(self, **args):
+    def update_TransPattern(self, **args) -> dict[str, Any]:
         """Update Translation Pattern
         :param uuid
         :param pattern
@@ -1511,7 +1512,7 @@ class AXL(object):
         return result
 
 
-    def update_User(self, **args):
+    def update_User(self, **args) -> dict[str, Any]:
         """
         Update end user for credentials
         :param userid: User ID
@@ -1547,7 +1548,7 @@ class AXL(object):
         return result
 
 
-    def list_AarGroups(self):
+    def list_AarGroups(self) -> dict[str, Any]:
         """
         Get List of AAR Groups
         :return: A list of dictionaries. If > 1000 records are returned, a list of list of dictionaries will be returned
@@ -1575,7 +1576,7 @@ class AXL(object):
         return result
 
 
-    def list_CallPickupGroup(self):
+    def list_CallPickupGroup(self) -> dict[str, Any]:
         """
         Get List of Call Pickup Groups
         :return: A list of dictionaries. If > 1000 records are returned, a list of list of dictionaries will be returned
@@ -1603,7 +1604,7 @@ class AXL(object):
         return result
 
 
-    def list_Css(self):
+    def list_Css(self) -> dict[str, Any]:
         """
         Get List of Calling Search Spaces
         :return: A list of dictionaries. If > 1000 records are returned, a list of list of dictionaries will be returned
@@ -1632,7 +1633,7 @@ class AXL(object):
         return result
 
 
-    def list_DevicePools(self):
+    def list_DevicePools(self) -> dict[str, Any]:
         """
         Get List of Device Pools
         :return: A list of dictionaries. If > 1000 records are returned, a list of list of dictionaries will be returned
@@ -1660,7 +1661,7 @@ class AXL(object):
         return result
 
 
-    def list_Locations(self):
+    def list_Locations(self) -> dict[str, Any]:
         """
         Get List of Locations
         :return: A list of dictionaries. If > 1000 records are returned, a list of list of dictionaries will be returned
@@ -1688,7 +1689,7 @@ class AXL(object):
         return result
     
 
-    def list_MediaResourceLists(self):
+    def list_MediaResourceLists(self) -> dict[str, Any]:
         """
         Get List of Media Reource Group Lists
         :return: A list of dictionaries. If > 1000 records are returned, a list of list of dictionaries will be returned
@@ -1716,7 +1717,7 @@ class AXL(object):
         return result
 
     
-    def list_MohAudioSources(self):
+    def list_MohAudioSources(self) -> dict[str, Any]:
         """
         Get List of Music on Hold Sources
         :return: A list of dictionaries. If > 1000 records are returned, a list of list of dictionaries will be returned
@@ -1745,7 +1746,7 @@ class AXL(object):
         return result
 
 
-    def list_PresenceGroups(self):
+    def list_PresenceGroups(self) -> dict[str, Any]:
         """
         Get List of Presence Groups
         :return: A list of dictionaries. If > 1000 records are returned, a list of list of dictionaries will be returned
@@ -1773,7 +1774,7 @@ class AXL(object):
         return result
 
 
-    def listProcessNodes(self):
+    def listProcessNodes(self) -> dict[str, Any]:
         
         result = {
             'success': False,
@@ -1799,7 +1800,7 @@ class AXL(object):
             return result
 
 
-    def list_RoutePartitions(self):
+    def list_RoutePartitions(self) -> dict[str, Any]:
         """
         Get List of Route Partitions
         :return: A list of dictionaries. If > 1000 records are returned, a list of list of dictionaries will be returned
@@ -1827,7 +1828,7 @@ class AXL(object):
         return result
 
 
-    def list_route_patterns(self):
+    def list_route_patterns(self) -> dict[str, Any]:
         """List all Route Patterns
         :return: result dictionary with list of route patterns
         """
@@ -1857,7 +1858,7 @@ class AXL(object):
         return result
 
 
-    def list_VoiceMailProfiles(self):
+    def list_VoiceMailProfiles(self) -> dict[str, Any]:
         """
         Get List of Route Partitions
         :return: A list of dictionaries. If > 1000 records are returned, a list of list of dictionaries will be returned
@@ -1885,7 +1886,7 @@ class AXL(object):
         return result
     
 
-    def execute_sql_update(self, query):
+    def execute_sql_update(self, query) -> dict[str, Any]:
         """
         Execute SQL update
         :param query: SQL Update to execute
@@ -1911,7 +1912,7 @@ class AXL(object):
             result = serialize_object(result)
             return result
 
-    def execute_sql_query(self, query):
+    def execute_sql_query(self, query) -> dict[str, Any]:
         """
         Execute SQL query and return results
         :param query: SQL query to execute
@@ -1951,7 +1952,7 @@ class AXL(object):
         return result
 
 
-    def _extract_element_value(self, element):
+    def _extract_element_value(self, element) -> dict[str, Any]:
         """Extract value from lxml Element or return as-is if already a dict/string"""
         try:
             # If it's already a dict, return it
@@ -1967,7 +1968,7 @@ class AXL(object):
         except:
             return element
 
-    def _reconstruct_rows(self, fields, fields_per_row):
+    def _reconstruct_rows(self, fields, fields_per_row) -> dict[str, Any]:
         """Reconstruct rows from flat list of field dicts"""
         rows = []
         for i in range(0, len(fields), fields_per_row):
@@ -1981,7 +1982,7 @@ class AXL(object):
         return rows
 
 
-    def list_phone_button_templates(self):
+    def list_phone_button_templates(self) -> dict[str, Any]:
         """
         Get List of Phone Button Templates
         :return: A list of dictionaries with template details
@@ -2010,7 +2011,7 @@ class AXL(object):
         return result
 
 
-    def get_phone_button_template(self, name):
+    def get_phone_button_template(self, name) -> dict[str, Any]:
         """
         Get Phone Button Template details
         :param name: Template name
@@ -2032,7 +2033,7 @@ class AXL(object):
         return result
 
 
-    def delete_phone_button_template(self, name):
+    def delete_phone_button_template(self, name) -> dict[str, Any]:
         """
         Delete a Phone Button Template
         :param name: Template name
@@ -2054,7 +2055,7 @@ class AXL(object):
         return result
 
 
-    def find_template_references(self, template_name):
+    def find_template_references(self, template_name) -> dict[str, Any]:
         """
         Find all references to a phone button template using SQL query
         :param template_name: Template name
@@ -2098,7 +2099,7 @@ class AXL(object):
         return result
 
 
-    def list_softkey_templates(self):
+    def list_softkey_templates(self) -> dict[str, Any]:
         """
         Get List of Softkey Templates with names
         Queries softkeytemplate table to get both UUID and template names
@@ -2133,7 +2134,7 @@ class AXL(object):
         return result
 
 
-    def get_softkey_template(self, name):
+    def get_softkey_template(self, name) -> dict[str, Any]:
         """
         Get Softkey Template details
         :param name: Template name
@@ -2179,7 +2180,7 @@ class AXL(object):
         return result
 
 
-    def find_softkey_template_dependencies(self, template_name):
+    def find_softkey_template_dependencies(self, template_name) -> dict[str, Any]:
         """
         Find all references to a softkey template using SQL query
         Tries multiple possible column names
@@ -2264,7 +2265,7 @@ class AXL(object):
         return result
 
 
-    def delete_softkey_template(self, name):
+    def delete_softkey_template(self, name) -> dict[str, Any]:
         """
         Delete a Softkey Template by name using SQL
         :param name: Template name
@@ -2292,11 +2293,10 @@ class AXL(object):
         except Exception as error:
             result['response'] = 'ERROR'
             result['error'] = str(error)
-        result = serialize_object(result)
         return result
 
 
-    def list_common_device_configs(self):
+    def list_common_device_configs(self) -> dict[str, Any]:
         """
         Get List of Common Device Configurations with names and UUIDs
         Queries commondeviceconfig table to get both pkid and name
@@ -2324,7 +2324,7 @@ class AXL(object):
         return result
 
 
-    def list_device_pools_sql(self):
+    def list_device_pools_sql(self) -> dict[str, Any]:
         """
         Get List of Device Pools with names and UUIDs
         Queries devicepool table to get both pkid and name
@@ -2352,7 +2352,7 @@ class AXL(object):
         return result
 
 
-    def find_device_pool_dependencies(self, dp_name):
+    def find_device_pool_dependencies(self, dp_name) -> dict[str, Any]:
         """
         Find all references to a Device Pool using SQL query
         :param dp_name: Device Pool name
@@ -2404,7 +2404,7 @@ class AXL(object):
         return result
 
 
-    def _find_route_groups_by_device_names(self, device_names):
+    def _find_route_groups_by_device_names(self, device_names) -> dict[str, Any]:
         """
         Find Route Groups that contain any of the given device names as members
         :param device_names: list of device names (e.g. gateways/trunks)
@@ -2431,7 +2431,7 @@ class AXL(object):
         return matches
 
 
-    def list_route_groups(self):
+    def list_route_groups(self) -> dict[str, Any]:
         """
         Get list of all Route Groups using AXL API
         :return: result dictionary with list of route groups
@@ -2468,7 +2468,7 @@ class AXL(object):
         return result
 
 
-    def get_route_group(self, name):
+    def get_route_group(self, name) -> dict[str, Any]:
         """
         Get details of a specific Route Group using AXL API
         :param name: Route Group name
@@ -2519,7 +2519,7 @@ class AXL(object):
         return result
 
 
-    def find_common_device_config_dependencies(self, cdc_name):
+    def find_common_device_config_dependencies(self, cdc_name) -> dict[str, Any]:
         """
         Find all references to a Common Device Configuration using SQL query
         :param cdc_name: Common Device Configuration name
@@ -2580,7 +2580,7 @@ class AXL(object):
         return result
 
 
-    def delete_common_device_config(self, name):
+    def delete_common_device_config(self, name) -> dict[str, Any]:
         """
         Delete a Common Device Configuration by name
         :param name: Common Device Configuration name
@@ -2605,7 +2605,7 @@ class AXL(object):
         return result
 
 
-    def _resolve_call_pickup_group_table(self):
+    def _resolve_call_pickup_group_table(self) -> dict[str, Any]:
         """
         Determine the actual database table name for Call Pickup Groups
         (varies across CUCM versions/builds). Caches the resolved name.
@@ -2627,7 +2627,7 @@ class AXL(object):
         return None
 
 
-    def list_call_pickup_groups(self):
+    def list_call_pickup_groups(self) -> dict[str, Any]:
         """
         Get List of Call Pickup Groups with names and UUIDs
         Queries the Call Pickup Group table to get both pkid and name
@@ -2661,7 +2661,7 @@ class AXL(object):
         return result
 
 
-    def get_CallPickupGroup(self, name, member_variant='dn'):
+    def get_CallPickupGroup(self, name, member_variant='dn') -> dict[str, Any]:
         """
         Get a Call Pickup Group's full details, including its members, via AXL
         :param name: Call Pickup Group name
@@ -2706,7 +2706,7 @@ class AXL(object):
         return result
 
 
-    def _extract_fk_value(self, value):
+    def _extract_fk_value(self, value) -> dict[str, Any]:
         """
         AXL foreign-key fields (XFkType) can come back as a plain string, a zeep
         CompoundValue, or (post-serialize_object) an OrderedDict - each exposing
@@ -2719,7 +2719,7 @@ class AXL(object):
         return value
 
 
-    def _extract_call_pickup_group_members(self, cpg_name, member_variant):
+    def _extract_call_pickup_group_members(self, cpg_name, member_variant) -> dict[str, Any]:
         """
         Fetch and normalize the member list for one member_variant ('dn' or 'group')
         :return: (members list, error string or None)
@@ -2738,7 +2738,7 @@ class AXL(object):
         return members, None
 
 
-    def find_call_pickup_group_dependencies(self, cpg_name):
+    def find_call_pickup_group_dependencies(self, cpg_name) -> dict[str, Any]:
         """
         Find all references to a Call Pickup Group: Directory Numbers whose Line
         config has this group assigned as their Call Pickup Group (via listLine,
@@ -2822,7 +2822,7 @@ class AXL(object):
         return result
 
 
-    def delete_call_pickup_group(self, name):
+    def delete_call_pickup_group(self, name) -> dict[str, Any]:
         """
         Delete a Call Pickup Group by name
         :param name: Call Pickup Group name
@@ -2847,7 +2847,7 @@ class AXL(object):
         return result
 
 
-    def _query_location_dependency(self, table_name, type_name, column_name, location_name):
+    def _query_location_dependency(self, table_name, type_name, column_name, location_name) -> dict[str, Any]:
         """
         Helper method to query a table for location dependencies
         :param table_name: Database table name
@@ -2873,7 +2873,7 @@ class AXL(object):
             pass
         return dependencies
 
-    def _query_location_dependency_by_fk(self, table_name, type_name, fk_column, location_name):
+    def _query_location_dependency_by_fk(self, table_name, type_name, fk_column, location_name) -> dict[str, Any]:
         """
         Helper method to query a table using location PKID (foreign key)
         :param table_name: Database table name
@@ -2916,7 +2916,7 @@ class AXL(object):
             pass
         return dependencies
 
-    def find_location_dependencies(self, location_name):
+    def find_location_dependencies(self, location_name) -> dict[str, Any]:
         """
         Find all references to a location using SQL query
         :param location_name: Location name
@@ -2973,7 +2973,7 @@ class AXL(object):
         return result
 
 
-    def delete_location(self, name):
+    def delete_location(self, name) -> dict[str, Any]:
         """
         Delete a Location by name
         :param name: Location name
@@ -2997,7 +2997,7 @@ class AXL(object):
         result = serialize_object(result)
         return result
 
-    def list_Regions(self):
+    def list_Regions(self) -> dict[str, Any]:
         """
         Get List of Regions
         :return: A list of dictionaries. If > 1000 records are returned, a list of list of dictionaries will be returned
@@ -3024,7 +3024,7 @@ class AXL(object):
         result = serialize_object(result)
         return result
 
-    def _query_region_dependency(self, table_name, type_name, column_name, region_name):
+    def _query_region_dependency(self, table_name, type_name, column_name, region_name) -> dict[str, Any]:
         """
         Helper method to query a table for region dependencies
         :param table_name: Database table name
@@ -3050,7 +3050,7 @@ class AXL(object):
             pass
         return dependencies
 
-    def _query_region_dependency_by_fk(self, table_name, type_name, fk_column, region_name):
+    def _query_region_dependency_by_fk(self, table_name, type_name, fk_column, region_name) -> dict[str, Any]:
         """
         Helper method to query a table using region PKID (foreign key)
         :param table_name: Database table name
@@ -3093,7 +3093,7 @@ class AXL(object):
             pass
         return dependencies
 
-    def find_region_dependencies(self, region_name):
+    def find_region_dependencies(self, region_name) -> dict[str, Any]:
         """
         Find all references to a region using SQL query
         :param region_name: Region name
@@ -3148,7 +3148,7 @@ class AXL(object):
         result = serialize_object(result)
         return result
 
-    def delete_region(self, name):
+    def delete_region(self, name) -> dict[str, Any]:
         """
         Delete a Region by name
         :param name: Region name
@@ -3172,7 +3172,7 @@ class AXL(object):
         result = serialize_object(result)
         return result
 
-    def _query_partition_dependency(self, table_name, type_name, column_name, partition_name):
+    def _query_partition_dependency(self, table_name, type_name, column_name, partition_name) -> dict[str, Any]:
         """
         Helper method to query a table for partition dependencies
         :param table_name: Database table name
@@ -3198,7 +3198,7 @@ class AXL(object):
             pass
         return dependencies
 
-    def _query_partition_dependency_by_fk(self, table_name, type_name, fk_column, partition_name):
+    def _query_partition_dependency_by_fk(self, table_name, type_name, fk_column, partition_name) -> dict[str, Any]:
         """
         Helper method to query a table using partition PKID (foreign key)
         :param table_name: Database table name
@@ -3241,7 +3241,7 @@ class AXL(object):
             pass
         return dependencies
 
-    def find_partition_dependencies(self, partition_name):
+    def find_partition_dependencies(self, partition_name) -> dict[str, Any]:
         """
         Find all references to a partition using SQL query
         :param partition_name: Partition name
@@ -3448,7 +3448,7 @@ class AXL(object):
         result = serialize_object(result)
         return result
 
-    def delete_partition(self, name):
+    def delete_partition(self, name) -> dict[str, Any]:
         """
         Delete a Partition by name
         :param name: Partition name
@@ -3472,7 +3472,7 @@ class AXL(object):
         result = serialize_object(result)
         return result
 
-    def get_table_info(self, table_name):
+    def get_table_info(self, table_name) -> dict[str, Any]:
         """
         Get sample row from table to inspect column names (for debugging schema)
         :param table_name: Table name to inspect
@@ -3506,7 +3506,7 @@ class AXL(object):
         result = serialize_object(result)
         return result
 
-    def _get_device_type(self, product, deviceclass):
+    def _get_device_type(self, product, deviceclass) -> dict[str, Any]:
         """
         Determine device type from product and class fields
         :param product: Device product field value
@@ -3560,7 +3560,7 @@ class AXL(object):
         # Default
         return 'Device'
 
-    def find_css_dependencies(self, css_name):
+    def find_css_dependencies(self, css_name) -> dict[str, Any]:
         """
         Find all references to a Calling Search Space using SQL query
         :param css_name: CSS name
@@ -3965,7 +3965,7 @@ class AXL(object):
         result = serialize_object(result)
         return result
             
-    def list_line_groups(self):
+    def list_line_groups(self) -> dict[str, Any]:
         """
         Get list of all Line Groups using AXL API
         :return: result dictionary with list of line groups
@@ -4005,7 +4005,7 @@ class AXL(object):
         return result
 
 
-    def get_line_group(self, name):
+    def get_line_group(self, name) -> dict[str, Any]:
         """
         Get details of a specific Line Group using AXL API
         :param name: Line Group name
@@ -4065,7 +4065,7 @@ class AXL(object):
         return result
 
 
-    def list_hunt_lists(self):
+    def list_hunt_lists(self) -> dict[str, Any]:
         """
         Get list of all Hunt Lists using AXL API
         :return: result dictionary with list of hunt lists
@@ -4106,7 +4106,7 @@ class AXL(object):
         return result
 
 
-    def get_hunt_list(self, name):
+    def get_hunt_list(self, name) -> dict[str, Any]:
         """
         Get details of a specific Hunt List using AXL API
         :param name: Hunt List name
@@ -4161,7 +4161,7 @@ class AXL(object):
         return result
 
 
-    def find_hunt_lists_by_line_group(self, lg_name):
+    def find_hunt_lists_by_line_group(self, lg_name) -> dict[str, Any]:
         """
         Find all Hunt Lists that reference a specific Line Group
         :param lg_name: Line Group name
@@ -4202,7 +4202,7 @@ class AXL(object):
         return result
 
 
-    def find_hunt_pilots_by_hunt_list(self, hl_name):
+    def find_hunt_pilots_by_hunt_list(self, hl_name) -> dict[str, Any]:
         """
         Find all Hunt Pilots that reference a specific Hunt List
         :param hl_name: Hunt List name
@@ -4243,7 +4243,7 @@ class AXL(object):
         return result
 
 
-    def find_hunt_list_dependencies(self, hl_name):
+    def find_hunt_list_dependencies(self, hl_name) -> dict[str, Any]:
         """
         Find all references to a Hunt List besides Hunt Pilots
         :param hl_name: Hunt List name
@@ -4283,7 +4283,7 @@ class AXL(object):
         return result
 
 
-    def delete_line_group(self, name):
+    def delete_line_group(self, name) -> dict[str, Any]:
         """
         Delete a Line Group by name
         :param name: Line Group name
@@ -4308,7 +4308,7 @@ class AXL(object):
         return result
 
 
-    def delete_hunt_list(self, name):
+    def delete_hunt_list(self, name) -> dict[str, Any]:
         """
         Delete a Hunt List by name
         :param name: Hunt List name
@@ -4333,7 +4333,7 @@ class AXL(object):
         return result
 
 
-    def list_hunt_pilots(self):
+    def list_hunt_pilots(self) -> dict[str, Any]:
         """
         Get list of all Hunt Pilots using AXL API
         :return: result dictionary with list of hunt pilots
@@ -4380,7 +4380,7 @@ class AXL(object):
         return result
 
 
-    def get_hunt_pilot(self, identifier, route_partition=None):
+    def get_hunt_pilot(self, identifier, route_partition=None) -> dict[str, Any]:
         """
         Get details of a specific Hunt Pilot using AXL API
         :param identifier: Hunt Pilot uuid or pattern
@@ -4432,7 +4432,7 @@ class AXL(object):
         return result
 
 
-    def get_hunt_pilot_details(self, uuid):
+    def get_hunt_pilot_details(self, uuid) -> dict[str, Any]:
         """
         Get Hunt Pilot settings (alerting name, forwarding, queueing) by uuid
         :param uuid: Hunt Pilot uuid
@@ -4454,7 +4454,7 @@ class AXL(object):
 
             hp = serialize_object(hp)
 
-            def forward(key):
+            def forward(key) -> dict[str, Any]:
                 fwd = hp.get(key) or {}
                 dest = fwd.get('destination') or ''
                 if fwd.get('usePersonalPreferences'):
@@ -4486,7 +4486,7 @@ class AXL(object):
         return result
 
 
-    def delete_hunt_pilot(self, uuid, name=''):
+    def delete_hunt_pilot(self, uuid, name='') -> dict[str, Any]:
         """
         Delete a Hunt Pilot by uuid
         :param uuid: Hunt Pilot uuid
