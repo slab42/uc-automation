@@ -16,7 +16,7 @@ is looked up as SEP<MAC>.
 
 Supports a single phone or a CSV file of phones on a single CUCM cluster.
 
-CSV Format (default: _DATA/delete_phones.csv, header row required):
+CSV Format (file name only, read from the _DATA folder; default: delete_phones.csv, header row required):
   device
   SEPDC0539FB8FA2
   AC7A5941C3B0
@@ -265,7 +265,9 @@ if __name__ == '__main__':
     axl = AXL(username=username, password=password, wsdl=wsdl, cucm=server, cucm_version=version)
 
     if prompt_yes_no('\nDelete phones from CSV file?', default=False):
-        csv_file = input('Enter CSV file name or full path [_DATA/delete_phones.csv]: ').strip() or str(basepath.parent / '_DATA' / 'delete_phones.csv')
+        csv_name = input('Enter CSV file name in _DATA folder [delete_phones.csv]: ').strip() or 'delete_phones.csv'
+        data_dir = script_dir.parent / '_DATA'
+        csv_file = str(data_dir / Path(csv_name).name)
         logger.info("Using CSV file: %s", csv_file)
         identifiers = read_identifiers_from_csv(csv_file, logger)
     else:
