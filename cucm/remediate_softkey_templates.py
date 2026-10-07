@@ -23,7 +23,7 @@ from datetime import datetime
 import argparse
 import urllib3
 from setup.logger import setup_logger
-from setup.prompt_utils import prompt_yes_no
+from setup.prompt_utils import prompt_yes_no, prompt_delete_mode
 from setup.multi_object_loader import get_object_for_single_operation, load_credentials, get_objects_for_multi_operation, load_credentials_for_multi_objects
 from ucmAPI import AXL
 
@@ -205,10 +205,13 @@ def delete_templates(templates, cluster_axl_map, logger):
     print(f"\nTotal: {len(templates)} templates across {len(clusters_set)} cluster(s)")
     print(f"{'='*80}\n")
 
-    if not prompt_yes_no('Delete these templates?', default=False):
+    mode = prompt_delete_mode('Delete these templates?')
+    if mode == 'n':
         print("Deletion cancelled by user")
         logger.info("Deletion cancelled by user")
         return 0, 0
+    individual = (mode == 'i')
+    logger.info('Delete mode: %s', 'individual' if individual else 'all')
 
     # Organize by cluster
     clusters_data = {}
@@ -236,6 +239,10 @@ def delete_templates(templates, cluster_axl_map, logger):
 
         for template in cluster_templates:
             template_name = template.get('name')
+            if individual and not prompt_yes_no(f"Delete '{template_name}'?", default=False):
+                print(f"  - Skipped: {template_name}")
+                logger.info('Skipped template: %s', template_name)
+                continue
             try:
                 result = axl.delete_softkey_template(template_name)
                 if result.get('success'):

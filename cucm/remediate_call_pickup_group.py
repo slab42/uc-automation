@@ -24,7 +24,7 @@ from datetime import datetime
 import argparse
 import urllib3
 from setup.logger import setup_logger
-from setup.prompt_utils import prompt_yes_no
+from setup.prompt_utils import prompt_yes_no, prompt_delete_mode
 from setup.multi_object_loader import get_object_for_single_operation, load_credentials, get_objects_for_multi_operation, load_credentials_for_multi_objects
 from ucmAPI import AXL
 
@@ -176,10 +176,13 @@ def delete_groups(groups, cluster_axl_map, logger):
     print(f"\nTotal: {len(groups)} groups across {len(clusters_set)} cluster(s)")
     print(f"{'='*80}\n")
 
-    if not prompt_yes_no('Delete these Call Pickup Groups?', default=False):
+    mode = prompt_delete_mode('Delete these Call Pickup Groups?')
+    if mode == 'n':
         print("Deletion cancelled by user")
         logger.info("Deletion cancelled by user")
         return 0, 0
+    individual = (mode == 'i')
+    logger.info('Delete mode: %s', 'individual' if individual else 'all')
 
     # Organize by cluster
     clusters_data = {}
@@ -206,6 +209,10 @@ def delete_groups(groups, cluster_axl_map, logger):
 
         for group in cluster_groups:
             group_name = group.get('name')
+            if individual and not prompt_yes_no(f"Delete '{group_name}'?", default=False):
+                print(f"  - Skipped: {group_name}")
+                logger.info('Skipped: %s', group_name)
+                continue
             try:
                 result = axl.delete_call_pickup_group(group_name)
                 if result.get('success'):

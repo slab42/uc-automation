@@ -35,3 +35,21 @@ def prompt_yes_no(prompt_text, default=True):
             return False
         else:
             print(f"Invalid input. Please enter 'y' or 'n'.")
+
+
+def prompt_delete_mode(prompt_text='Delete these items?'):
+    """
+    Ask how to proceed with a deletion: (N/y/i).
+
+    Returns:
+        str: 'n' (cancel, default), 'y' (delete all), or 'i' (confirm each individually)
+    """
+    while True:
+        response = input(f'{prompt_text} (N/y/i) [i = individually]: ').strip().lower()
+        if response in ('', 'n', 'no'):
+            return 'n'
+        if response in ('y', 'yes'):
+            return 'y'
+        if response in ('i', 'individual', 'individually'):
+            return 'i'
+        print("Invalid input. Please enter 'n', 'y', or 'i'.")

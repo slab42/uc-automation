@@ -42,7 +42,7 @@ import csv
 import re
 import urllib3
 from setup.logger import setup_logger
-from setup.prompt_utils import prompt_yes_no
+from setup.prompt_utils import prompt_yes_no, prompt_delete_mode
 from setup.multi_object_loader import get_object_for_single_operation, load_credentials
 from ucmAPI import AXL
 
@@ -147,13 +147,17 @@ def print_phones_available(phones, not_found):
     print(f"\n{'='*80}")
 
 
-def delete_phones(phones, axl, logger):
+def delete_phones(phones, axl, logger, individual=False):
     """Delete the phones. Returns (deleted phones, failed count)"""
     deleted = []
     failed = 0
     print("\nDeleting phones...\n")
     for phone in phones:
         name = phone['name']
+        if individual and not prompt_yes_no(f"Delete Phone '{name}'?", default=False):
+            print(f"  - Skipped Phone: {name}")
+            logger.info('Skipped Phone: %s', name)
+            continue
         try:
             result = axl.remove_Phone(name)
         except Exception as e:
@@ -288,13 +292,14 @@ if __name__ == '__main__':
         logger.info("Delete Phones And Orphan DNs - Completed")
         sys.exit(0)
 
-    if not prompt_yes_no(f'\nDelete {len(phones)} phone(s) and any directory numbers left unassigned?', default=False):
+    mode = prompt_delete_mode(f'\nDelete {len(phones)} phone(s) and any directory numbers left unassigned?')
+    if mode == 'n':
         print("Deletion cancelled by user")
         logger.info("Deletion cancelled by user")
         logger.info("Delete Phones And Orphan DNs - Completed")
         sys.exit(0)
 
-    deleted_phones, phones_failed = delete_phones(phones, axl, logger)
+    deleted_phones, phones_failed = delete_phones(phones, axl, logger, individual=(mode == 'i'))
     dn_deleted, dn_in_use, dn_undeletable = cleanup_directory_numbers(deleted_phones, axl, logger)
 
     print_summary(len(phones), len(deleted_phones), phones_failed, dn_deleted, dn_in_use, dn_undeletable, logger)

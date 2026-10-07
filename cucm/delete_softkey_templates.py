@@ -21,7 +21,7 @@ from datetime import datetime
 import csv
 import urllib3
 from setup.logger import setup_logger
-from setup.prompt_utils import prompt_yes_no
+from setup.prompt_utils import prompt_yes_no, prompt_delete_mode
 from setup.multi_object_loader import get_objects_for_multi_operation, load_credentials_for_multi_objects, get_object_for_single_operation, load_credentials
 from ucmAPI import AXL
 
@@ -41,10 +41,10 @@ def read_csv_file(csv_path):
 
 
 def confirm_deletion(templates, logger):
-    """Show templates to be deleted and ask for confirmation"""
+    """Show templates to be deleted and ask how to proceed. Returns 'n', 'y' or 'i'"""
     if not templates:
         print("No templates to delete")
-        return False
+        return 'n'
 
     print(f"\n{'='*80}")
     print(f"Templates to Delete ({len(templates)} templates)")
@@ -58,10 +58,10 @@ def confirm_deletion(templates, logger):
     print(f"\nTotal: {len(templates)} templates across {len(clusters_set)} cluster(s)")
     print(f"{'='*80}\n")
 
-    return prompt_yes_no('Delete these templates?', default=False)
+    return prompt_delete_mode('Delete these templates?')
 
 
-def delete_templates_by_cluster(templates, logger):
+def delete_templates_by_cluster(templates, logger, individual=False):
     """Organize and delete templates by cluster"""
     clusters_data = {}
 
@@ -124,6 +124,10 @@ def delete_templates_by_cluster(templates, logger):
             # Delete templates for this cluster
             for template in clusters_data[cluster_name]:
                 template_name = template.get('name')
+                if individual and not prompt_yes_no(f"Delete '{template_name}'?", default=False):
+                    print(f"  - Skipped: {template_name}")
+                    logger.info('Skipped template: %s', template_name)
+                    continue
                 try:
                     result = axl.delete_softkey_template(template_name)
                     if result.get('success'):
@@ -200,14 +204,15 @@ if __name__ == '__main__':
     print(f"Successfully read {len(templates)} templates from CSV\n")
 
     # Confirm deletion
-    if not confirm_deletion(templates, logger):
+    mode = confirm_deletion(templates, logger)
+    if mode == 'n':
         print("Deletion cancelled by user")
         logger.info("Deletion cancelled by user")
         sys.exit(0)
 
     # Delete templates
     print("\nDeleting templates...\n")
-    successful, failed = delete_templates_by_cluster(templates, logger)
+    successful, failed = delete_templates_by_cluster(templates, logger, individual=(mode == 'i'))
 
     # Summary
     print(f"\n{'='*80}")

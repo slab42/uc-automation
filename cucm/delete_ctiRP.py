@@ -41,7 +41,7 @@ import argparse
 import csv
 import urllib3
 from setup.logger import setup_logger
-from setup.prompt_utils import prompt_yes_no
+from setup.prompt_utils import prompt_yes_no, prompt_delete_mode
 from setup.multi_object_loader import get_object_for_single_operation, load_credentials
 from ucmAPI import AXL
 
@@ -130,13 +130,17 @@ def print_available(route_points, not_found):
     print(f"\n{'='*80}")
 
 
-def delete_route_points(route_points, axl, logger):
+def delete_route_points(route_points, axl, logger, individual=False):
     """Delete the CTI Route Points. Returns (deleted, failed count)"""
     deleted = []
     failed = 0
     print("\nDeleting CTI Route Points...\n")
     for rp in route_points:
         name = rp['name']
+        if individual and not prompt_yes_no(f"Delete CTI Route Point '{name}'?", default=False):
+            print(f"  - Skipped CTI Route Point: {name}")
+            logger.info('Skipped CTI Route Point: %s', name)
+            continue
         try:
             result = axl.remove_Cti_Route_Point(name)
         except Exception as e:
@@ -271,13 +275,14 @@ if __name__ == '__main__':
         logger.info("Delete CTI Route Points And DNs - Completed")
         sys.exit(0)
 
-    if not prompt_yes_no(f'\nDelete {len(route_points)} CTI Route Point(s) and any directory numbers left unassigned?', default=False):
+    mode = prompt_delete_mode(f'\nDelete {len(route_points)} CTI Route Point(s) and any directory numbers left unassigned?')
+    if mode == 'n':
         print("Deletion cancelled by user")
         logger.info("Deletion cancelled by user")
         logger.info("Delete CTI Route Points And DNs - Completed")
         sys.exit(0)
 
-    deleted_rps, rps_failed = delete_route_points(route_points, axl, logger)
+    deleted_rps, rps_failed = delete_route_points(route_points, axl, logger, individual=(mode == 'i'))
     dn_deleted, dn_in_use, dn_undeletable = cleanup_directory_numbers(deleted_rps, axl, logger)
 
     print_summary(len(route_points), len(deleted_rps), rps_failed, dn_deleted, dn_in_use, dn_undeletable, logger)

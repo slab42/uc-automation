@@ -24,7 +24,7 @@ import argparse
 import urllib3
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from setup.logger import setup_logger
-from setup.prompt_utils import prompt_yes_no
+from setup.prompt_utils import prompt_yes_no, prompt_delete_mode
 from setup.multi_object_loader import get_object_for_single_operation, load_credentials, get_objects_for_multi_operation, load_credentials_for_multi_objects
 from ucmAPI import AXL
 from lookup_device_type import lookup_device_type, get_device_type_from_phone_data
@@ -250,10 +250,13 @@ def delete_css_list(css_list, cluster_axl_map, logger):
     print(f"\nTotal: {len(css_list)} CSSs across {len(clusters_set)} cluster(s)")
     print(f"{'='*80}\n")
 
-    if not prompt_yes_no('Delete these CSSs?', default=False):
+    mode = prompt_delete_mode('Delete these CSSs?')
+    if mode == 'n':
         print("Deletion cancelled by user")
         logger.info("Deletion cancelled by user")
         return 0, 0
+    individual = (mode == 'i')
+    logger.info('Delete mode: %s', 'individual' if individual else 'all')
 
     # Organize by cluster
     clusters_data = {}
@@ -281,6 +284,10 @@ def delete_css_list(css_list, cluster_axl_map, logger):
 
         for css in cluster_css:
             css_name = css.get('name')
+            if individual and not prompt_yes_no(f"Delete '{css_name}'?", default=False):
+                print(f"  - Skipped: {css_name}")
+                logger.info('Skipped: %s', css_name)
+                continue
             try:
                 result = axl.remove_Calling_Search_Space(css_name)
                 if result.get('success'):

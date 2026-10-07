@@ -37,7 +37,7 @@ from datetime import datetime
 import argparse
 import urllib3
 from setup.logger import setup_logger
-from setup.prompt_utils import prompt_yes_no
+from setup.prompt_utils import prompt_yes_no, prompt_delete_mode
 from setup.multi_object_loader import get_object_for_single_operation, load_credentials, get_objects_for_multi_operation, load_credentials_for_multi_objects
 from ucmAPI import AXL
 
@@ -521,10 +521,13 @@ def delete_hunt_objects(unused_objects, cluster_axl_map, logger):
 
     print(f"\n{'='*80}\n")
 
-    if not prompt_yes_no(f'Delete these {total_to_delete} objects?', default=False):
+    mode = prompt_delete_mode(f'Delete these {total_to_delete} objects?')
+    if mode == 'n':
         print("Deletion cancelled by user")
         logger.info("Deletion cancelled by user")
         return 0, 0
+    individual = (mode == 'i')
+    logger.info('Delete mode: %s', 'individual' if individual else 'all')
 
     successful_deletes = 0
     failed_deletes = 0
@@ -540,6 +543,10 @@ def delete_hunt_objects(unused_objects, cluster_axl_map, logger):
 
         axl = cluster_axl_map[cluster_name]
         lg_name = lg.get('name')
+        if individual and not prompt_yes_no(f"Delete Line Group '{lg_name}'?", default=False):
+            print(f"  - Skipped Line Group: {lg_name}")
+            logger.info('Skipped Line Group: %s', lg_name)
+            continue
         try:
             result = axl.delete_line_group(lg_name)
             if result.get('success'):
@@ -565,6 +572,10 @@ def delete_hunt_objects(unused_objects, cluster_axl_map, logger):
 
         axl = cluster_axl_map[cluster_name]
         hl_name = hl.get('name')
+        if individual and not prompt_yes_no(f"Delete Hunt List '{hl_name}'?", default=False):
+            print(f"  - Skipped Hunt List: {hl_name}")
+            logger.info('Skipped Hunt List: %s', hl_name)
+            continue
         try:
             result = axl.delete_hunt_list(hl_name)
             if result.get('success'):
@@ -590,6 +601,10 @@ def delete_hunt_objects(unused_objects, cluster_axl_map, logger):
 
         axl = cluster_axl_map[cluster_name]
         hp_name = hp.get('name')
+        if individual and not prompt_yes_no(f"Delete Hunt Pilot '{hp_name}'?", default=False):
+            print(f"  - Skipped Hunt Pilot: {hp_name}")
+            logger.info('Skipped Hunt Pilot: %s', hp_name)
+            continue
         hp_uuid = hp.get('uuid')
         try:
             result = axl.delete_hunt_pilot(hp_uuid, hp_name)

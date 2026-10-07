@@ -33,7 +33,7 @@ from datetime import datetime
 import argparse
 import urllib3
 from setup.logger import setup_logger
-from setup.prompt_utils import prompt_yes_no
+from setup.prompt_utils import prompt_yes_no, prompt_delete_mode
 from setup.multi_object_loader import get_object_for_single_operation, load_credentials, get_objects_for_multi_operation, load_credentials_for_multi_objects
 from ucmAPI import AXL
 
@@ -218,10 +218,13 @@ def delete_device_pools(pools, cluster_axl_map, logger):
     print(f"\nTotal: {len(pools)} Device Pools across {len(clusters_set)} cluster(s)")
     print(f"{'='*80}\n")
 
-    if not prompt_yes_no('Delete these Device Pools?', default=False):
+    mode = prompt_delete_mode('Delete these Device Pools?')
+    if mode == 'n':
         print("Deletion cancelled by user")
         logger.info("Deletion cancelled by user")
         return 0, 0
+    individual = (mode == 'i')
+    logger.info('Delete mode: %s', 'individual' if individual else 'all')
 
     clusters_data = {}
     for pool in pools:
@@ -245,6 +248,10 @@ def delete_device_pools(pools, cluster_axl_map, logger):
 
         for pool in cluster_pools:
             pool_name = pool.get('name')
+            if individual and not prompt_yes_no(f"Delete '{pool_name}'?", default=False):
+                print(f"  - Skipped: {pool_name}")
+                logger.info('Skipped: %s', pool_name)
+                continue
             try:
                 result = axl.remove_Device_Pool(pool_name)
                 if result.get('success'):

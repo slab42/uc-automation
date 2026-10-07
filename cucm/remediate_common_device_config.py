@@ -23,7 +23,7 @@ from datetime import datetime
 import argparse
 import urllib3
 from setup.logger import setup_logger
-from setup.prompt_utils import prompt_yes_no
+from setup.prompt_utils import prompt_yes_no, prompt_delete_mode
 from setup.multi_object_loader import get_object_for_single_operation, load_credentials, get_objects_for_multi_operation, load_credentials_for_multi_objects
 from ucmAPI import AXL
 
@@ -171,10 +171,13 @@ def delete_configs(configs, cluster_axl_map, logger):
     print(f"\nTotal: {len(configs)} configurations across {len(clusters_set)} cluster(s)")
     print(f"{'='*80}\n")
 
-    if not prompt_yes_no('Delete these Common Device Configurations?', default=False):
+    mode = prompt_delete_mode('Delete these Common Device Configurations?')
+    if mode == 'n':
         print("Deletion cancelled by user")
         logger.info("Deletion cancelled by user")
         return 0, 0
+    individual = (mode == 'i')
+    logger.info('Delete mode: %s', 'individual' if individual else 'all')
 
     # Organize by cluster
     clusters_data = {}
@@ -201,6 +204,10 @@ def delete_configs(configs, cluster_axl_map, logger):
 
         for config in cluster_configs:
             config_name = config.get('name')
+            if individual and not prompt_yes_no(f"Delete '{config_name}'?", default=False):
+                print(f"  - Skipped: {config_name}")
+                logger.info('Skipped: %s', config_name)
+                continue
             try:
                 result = axl.delete_common_device_config(config_name)
                 if result.get('success'):
