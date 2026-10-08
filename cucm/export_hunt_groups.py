@@ -38,7 +38,7 @@ from datetime import datetime
 import argparse
 import urllib3
 from setup.logger import setup_logger
-from setup.prompt_utils import prompt_yes_no
+from setup.prompt_utils import prompt_yes_no, prompt_use_multiple
 from setup.multi_object_loader import get_object_for_single_operation, load_credentials, get_objects_for_multi_operation, load_credentials_for_multi_objects
 from ucmAPI import AXL
 
@@ -209,7 +209,7 @@ if __name__ == '__main__':
     print("="*80)
 
     clusters_data = get_objects_for_multi_operation(basepath, 'CUCM', server_type='publisher')
-    use_multiple = bool(clusters_data) and prompt_yes_no(f'{len(clusters_data)} clusters found. Use multiple clusters?', default=False)
+    use_multiple = bool(clusters_data) and prompt_use_multiple(len(clusters_data), 'clusters', default=False)
 
     if use_multiple:
         use_same = prompt_yes_no('Use same credentials for all clusters?', default=True)

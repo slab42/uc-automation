@@ -24,7 +24,7 @@ import argparse
 import urllib3
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from setup.logger import setup_logger
-from setup.prompt_utils import prompt_yes_no, prompt_delete_mode
+from setup.prompt_utils import prompt_yes_no, prompt_use_multiple, prompt_delete_mode
 from setup.multi_object_loader import get_object_for_single_operation, load_credentials, get_objects_for_multi_operation, load_credentials_for_multi_objects
 from ucmAPI import AXL
 from lookup_device_type import lookup_device_type, get_device_type_from_phone_data
@@ -342,7 +342,7 @@ if __name__ == '__main__':
 
     clusters_data = get_objects_for_multi_operation(basepath, 'CUCM', server_type='publisher')
     if clusters_data:
-        use_multiple = prompt_yes_no(f'{len(clusters_data)} clusters found. Use multiple clusters?', default=False)
+        use_multiple = prompt_use_multiple(len(clusters_data), 'clusters', default=False)
 
         if use_multiple:
             all_no_dep_css, cluster_axl_map = run_on_all_clusters(script_dir, clusters_data, logger, debug_mode=args.verbose)

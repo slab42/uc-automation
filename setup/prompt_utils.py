@@ -53,3 +53,17 @@ def prompt_delete_mode(prompt_text='Delete these items?'):
         if response in ('i', 'individual', 'individually'):
             return 'i'
         print("Invalid input. Please enter 'n', 'y', or 'i'.")
+
+
+def prompt_use_multiple(count, noun='clusters', default=False):
+    """
+    Ask "N <noun> found. Use multiple <noun>?" unless multi-cluster is disabled.
+
+    Multi-cluster is disabled with `multi_cluster = false` under [SETTINGS] in
+    .env/credentials.env. When disabled, returns False without prompting so the
+    script proceeds straight to single cluster/router selection.
+    """
+    from setup.env_loader import CredentialsLoader
+    if not CredentialsLoader().is_multi_cluster_enabled():
+        return False
+    return prompt_yes_no(f'{count} {noun} found. Use multiple {noun}?', default=default)

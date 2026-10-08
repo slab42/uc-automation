@@ -61,7 +61,7 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 
 from setup.logger import setup_logger
-from setup.prompt_utils import prompt_yes_no
+from setup.prompt_utils import prompt_yes_no, prompt_use_multiple
 from setup.env_loader import EnvironmentConfig, CredentialsLoader
 from setup.var_loader import load_customer_variables
 from setup.multi_object_loader import (
@@ -320,7 +320,7 @@ def main():
     else:
         routers = get_objects_for_multi_operation(basepath, 'CUBE')
         if routers:
-            use_multiple = prompt_yes_no(f'{len(routers)} routers found. Use multiple routers?', default=True)
+            use_multiple = prompt_use_multiple(len(routers), 'routers', default=True)
         else:
             use_multiple = False
 

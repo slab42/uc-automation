@@ -80,6 +80,9 @@ class CredentialsLoader:
         If cluster_name is None, returns a list of all available clusters.
         If cluster_name is specified, returns credentials for that cluster.
         """
+        if not self.is_credential_storage_enabled():
+            return None if cluster_name else []
+
         sections = [s for s in self.config.sections() if s.startswith('CUCM:')]
 
         if not sections:
@@ -104,6 +107,9 @@ class CredentialsLoader:
         Get CUC cluster credentials.
         If cluster_name is None, returns a list of all available clusters.
         """
+        if not self.is_credential_storage_enabled():
+            return None if cluster_name else []
+
         sections = [s for s in self.config.sections() if s.startswith('CUC:')]
 
         if not sections:
@@ -126,6 +132,9 @@ class CredentialsLoader:
         Get CUBE device credentials.
         If device_name is None, returns a list of all available devices.
         """
+        if not self.is_credential_storage_enabled():
+            return None if device_name else []
+
         sections = [s for s in self.config.sections() if s.startswith('CUBE:')]
 
         if not sections:
@@ -148,6 +157,9 @@ class CredentialsLoader:
         Get Webex cluster credentials.
         If cluster_name is None, returns a list of all available clusters.
         """
+        if not self.is_credential_storage_enabled():
+            return None if cluster_name else []
+
         sections = [s for s in self.config.sections() if s.startswith('WEBEX:')]
 
         if not sections:
@@ -164,6 +176,23 @@ class CredentialsLoader:
         if self.config.has_section(section):
             return self._get_section_as_dict(section, cluster_name)
         return None
+
+    def is_multi_cluster_enabled(self):
+        """
+        Return True unless [SETTINGS] multi_cluster is set to a false value
+        (false/no/off/0) in credentials.env. Missing setting means enabled.
+        """
+        value = self.config.get('SETTINGS', 'multi_cluster', fallback='true')
+        return value.strip().lower() not in ('false', 'no', 'off', '0')
+
+    def is_credential_storage_enabled(self):
+        """
+        Return True unless [SETTINGS] credential_storage is set to a false value
+        (false/no/off/0) in credentials.env. Missing setting means enabled.
+        When disabled, stored credentials are ignored and scripts always prompt.
+        """
+        value = self.config.get('SETTINGS', 'credential_storage', fallback='true')
+        return value.strip().lower() not in ('false', 'no', 'off', '0')
 
     def _get_section_as_dict(self, section, identifier):
         """Convert a config section to a dictionary. Blank passwords stay blank; callers prompt."""

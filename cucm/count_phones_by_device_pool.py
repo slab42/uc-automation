@@ -42,7 +42,7 @@ import time
 import urllib3
 import csv
 from setup.logger import setup_logger
-from setup.prompt_utils import prompt_yes_no
+from setup.prompt_utils import prompt_yes_no, prompt_use_multiple
 from setup.multi_object_loader import (
     get_object_for_single_operation,
     load_credentials,
@@ -319,7 +319,7 @@ if __name__ == '__main__':
 
     clusters_data = get_objects_for_multi_operation(basepath, 'CUCM', server_type='publisher')
     if clusters_data:
-        use_multiple = prompt_yes_no(f'{len(clusters_data)} clusters found. Use multiple clusters?', default=False)
+        use_multiple = prompt_use_multiple(len(clusters_data), 'clusters', default=False)
         if use_multiple:
             run_on_all_clusters(basepath, clusters_data, operation_params, logger)
         else:

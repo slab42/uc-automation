@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# TITLE: Delete Call Handlers
+# TITLE: Call Handlers Delete
 
 """
 Delete Cisco Unity Connection Call Handlers from a CSV file.
@@ -44,7 +44,7 @@ from csv import DictReader
 from datetime import datetime
 import urllib3
 from setup.logger import setup_logger
-from setup.prompt_utils import prompt_yes_no
+from setup.prompt_utils import prompt_yes_no, prompt_use_multiple
 from setup.multi_object_loader import (
     get_object_for_single_operation,
     load_credentials,
@@ -197,7 +197,7 @@ if __name__ == '__main__':
     clusters_data = get_objects_for_multi_operation(basepath, 'CUC', server_type='publisher')
     use_multiple = False
     if clusters_data:
-        use_multiple = prompt_yes_no(f'{len(clusters_data)} clusters found. Use multiple clusters?', default=False)
+        use_multiple = prompt_use_multiple(len(clusters_data), 'clusters', default=False)
         if use_multiple:
             print('\nWARNING: ObjectIds are per-cluster. The same CSV will be applied to every')
             print('selected cluster; make sure the CSV objectIds actually belong to each cluster.')
