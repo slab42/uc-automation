@@ -1202,6 +1202,39 @@ class AXL(object):
         return result
 
 
+    def find_phone_names_by_device_pool(self, dp_names) -> dict[str, Any]:
+        """
+        Find phone device names that belong to any of the given device pools (SQL)
+        :param dp_names: list of exact device pool names
+        :return: result dictionary; response is a list of phone device names
+        """
+        result = {
+            'success': False,
+            'response': [],
+            'error': '',
+        }
+        names = ', '.join("'" + n.replace("'", "''") + "'" for n in dp_names)
+        try:
+            query = f"""
+            SELECT d.name AS name
+            FROM device d
+            INNER JOIN devicepool dp ON dp.pkid = d.fkdevicepool
+            WHERE dp.name IN ({names}) AND d.tkclass = 1
+            ORDER BY d.name
+            """
+            query_result = self.execute_sql_query(query)
+            if not query_result.get('success'):
+                result['error'] = query_result.get('error')
+                return serialize_object(result)
+            rows = self._reconstruct_rows(query_result.get('response'), 1)
+            result['success'] = True
+            result['response'] = [r.get('name') for r in rows if r.get('name')]
+        except Fault as error:
+            result['error'] = error.message
+        result = serialize_object(result)
+        return result
+
+
     def find_cti_route_point_lines(self, identifier) -> dict[str, Any]:
         """
         Find CTI Route Points by device name or by a directory number on them (SQL)
@@ -1512,6 +1545,186 @@ class AXL(object):
         return result
 
 
+    def list_TransPattern(self) -> dict[str, Any]:
+        """List all Translation Patterns
+        :return: result dictionary with list of translation patterns
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+        try:
+            fullResp = self.service.listTransPattern(
+                searchCriteria={'pattern': '%'},
+                returnedTags={
+                    'description': True,
+                    'pattern': True,
+                    'routePartitionName': True,
+                })
+            if fullResp['return'] == None:
+                resp = ''
+            else:
+                resp = fullResp['return']['transPattern']
+            result['success'] = True
+            result['response'] = resp
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        result = serialize_object(result)
+        return result
+
+
+    def find_translation_patterns_sql(self, search_by, search_value) -> dict[str, Any]:
+        """Find translation patterns by pattern, partition, or description
+        :param search_by: 'pattern', 'partition', or 'description'
+        :param search_value: Search value (supports wildcards with %)
+        :return: result dictionary with list of matching patterns
+        """
+        result = {
+            'success': False,
+            'response': [],
+            'error': '',
+        }
+
+        try:
+            import re
+
+            # Get all translation patterns
+            fullResp = self.service.listTransPattern(
+                searchCriteria={'pattern': '%'},
+                returnedTags={'pattern': True, 'routePartitionName': True, 'description': True})
+
+            # Serialize the zeep response object to dict first
+            fullResp_dict = serialize_object(fullResp)
+
+            if fullResp_dict.get('return') == None:
+                all_patterns = []
+            else:
+                resp_data = fullResp_dict.get('return')
+
+                # Try different possible keys for the response
+                if isinstance(resp_data, dict):
+                    if 'transPattern' in resp_data:
+                        all_patterns = resp_data['transPattern']
+                    elif 'translationpattern' in resp_data:
+                        all_patterns = resp_data['translationpattern']
+                    else:
+                        # If it's not a recognized key, treat the whole response as the pattern list
+                        all_patterns = resp_data
+                else:
+                    all_patterns = resp_data
+
+                if not isinstance(all_patterns, list):
+                    all_patterns = [all_patterns] if all_patterns else []
+
+            # Normalize all pattern objects to dicts
+            normalized = []
+            for p in all_patterns:
+                if isinstance(p, dict):
+                    normalized.append(p)
+                else:
+                    # Serialize zeep objects
+                    serialized = serialize_object(p)
+                    normalized.append(serialized)
+            all_patterns = normalized
+
+            # Convert search_value wildcards: replace % with regex-like matching
+            search_term = search_value.lower()
+            if '%' in search_term:
+                search_term = search_term.replace('%', '.*')
+                search_regex = re.compile(f'^{search_term}$', re.IGNORECASE)
+                use_regex = True
+            else:
+                use_regex = False
+
+            # Filter patterns based on search_by
+            matched = []
+            for idx, pattern_obj in enumerate(all_patterns):
+                # Helper function to extract string value from potential OrderedDict
+                def get_string_value(obj, *keys):
+                    for key in keys:
+                        val = obj.get(key) if isinstance(obj, dict) else getattr(obj, key, None)
+                        if val is not None:
+                            # If it's a dict/OrderedDict with _value_1, extract that
+                            if isinstance(val, dict) and '_value_1' in val:
+                                return str(val['_value_1']).lower()
+                            # If it's a dict/OrderedDict, try to get a reasonable string
+                            elif isinstance(val, dict) and val:
+                                # Return the first non-uuid value
+                                for k, v in val.items():
+                                    if not k.startswith('_') and not k.lower().startswith('uuid'):
+                                        return str(v).lower()
+                            else:
+                                return str(val).lower()
+                    return ''
+
+                # Extract field values, handling OrderedDict/complex types
+                pattern_val = get_string_value(pattern_obj, 'pattern', 'Pattern')
+                partition_val = get_string_value(pattern_obj, 'routePartitionName', 'RoutePartitionName', 'routePartition')
+                description_val = get_string_value(pattern_obj, 'description', 'Description')
+
+                match = False
+                if search_by == 'pattern':
+                    if use_regex:
+                        match = search_regex.match(pattern_val) is not None
+                    else:
+                        match = search_term in pattern_val
+                elif search_by == 'partition':
+                    if use_regex:
+                        match = search_regex.match(partition_val) is not None
+                    else:
+                        match = search_term in partition_val
+                elif search_by == 'description':
+                    if use_regex:
+                        match = search_regex.match(description_val) is not None
+                    else:
+                        match = search_term in description_val
+
+                if match:
+                    matched.append({
+                        'pattern': get_string_value(pattern_obj, 'pattern', 'Pattern'),
+                        'partition': get_string_value(pattern_obj, 'routePartitionName', 'RoutePartitionName', 'routePartition'),
+                        'description': get_string_value(pattern_obj, 'description', 'Description'),
+                    })
+            result['success'] = True
+            result['response'] = matched
+
+        except Fault as error:
+            result['error'] = str(error)
+            result['response'] = []
+            result['success'] = True
+        except Exception as error:
+            result['error'] = str(error)
+            result['response'] = []
+            result['success'] = True
+
+        result = serialize_object(result)
+        return result
+
+
+    def remove_TransPattern(self, pattern, partition=None) -> dict[str, Any]:
+        """Remove a Translation Pattern
+        :param pattern: Pattern string
+        :param partition: Route partition name (can be None for <None> partition)
+        :return: result dictionary
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+        try:
+            self.service.removeTransPattern(pattern=pattern, routePartitionName=partition)
+            result['success'] = True
+            result['response'] = f'Translation Pattern {pattern} in {partition or "<None>"} removed'
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        result = serialize_object(result)
+        return result
+
+
     def update_User(self, **args) -> dict[str, Any]:
         """
         Update end user for credentials
@@ -1813,7 +2026,8 @@ class AXL(object):
         try:
             fullResp = self.service.listRoutePartition(
                     {'name' : f'%'}, returnedTags={
-                        'name' : ''
+                        'name' : '',
+                        'description' : ''
                     })
             if fullResp['return'] == None:
                 resp = ''

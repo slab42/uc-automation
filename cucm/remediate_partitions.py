@@ -145,7 +145,8 @@ def display_partitions(axl, logger, script_dir, debug_mode=False):
                     for debug_line in deps_result.get('debug', []):
                         print(f"      {debug_line}")
             no_dependency_partitions.append({
-                'name': partition_name
+                'name': partition_name,
+                'description': partition.get('description') or ''
             })
         print()
 
@@ -229,7 +230,9 @@ def delete_partitions(partitions, cluster_axl_map, logger):
 
     clusters_set = set()
     for partition in partitions:
-        print(f"  - {partition.get('name')} (Cluster: {partition.get('cluster')})")
+        description = partition.get('description')
+        desc_text = f" - {description}" if description else ""
+        print(f"  - {partition.get('name')}{desc_text} (Cluster: {partition.get('cluster')})")
         clusters_set.add(partition.get('cluster'))
 
     print(f"\nTotal: {len(partitions)} partitions across {len(clusters_set)} cluster(s)")

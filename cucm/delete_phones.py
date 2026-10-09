@@ -14,7 +14,8 @@ Phone identifiers can be a device name (SEPDC0539FB8FA2, CSFjsmith) or a MAC add
 in any common format (DC0539FB8FA2, dc:05:39:fb:8f:a2, dc05.39fb.8fa2). A MAC address
 is looked up as SEP<MAC>.
 
-Supports a single phone or a CSV file of phones on a single CUCM cluster.
+Supports a single phone, a CSV file of phones, or all phones in device pools matched
+by a search string, on a single CUCM cluster.
 
 CSV Format (file name only, read from the _DATA folder; default: delete_phones.csv, header row required):
   device
@@ -127,6 +128,51 @@ def find_phones(identifiers, axl, logger):
                     ', '.join(fmt_dn(p, pt) for p, pt in phone['lines']) or 'none')
         phones.append(phone)
     return phones, not_found
+
+
+def select_phones_by_device_pool(axl, logger):
+    """Search device pools by string and return the names of phones in the selected pools"""
+    search = input('Enter device pool search string: ').strip()
+    if not search:
+        return []
+    result = axl.list_device_pools_sql()
+    if not result.get('success'):
+        print(f"Error: unable to list device pools: {result.get('error')}")
+        logger.error('Device pool list failed: %s', result.get('error'))
+        return []
+    pools = [r['name'] for r in result.get('response', [])
+             if r.get('name') and search.lower() in r['name'].lower()]
+    if not pools:
+        print(f"No device pools found matching '{search}'")
+        logger.info("No device pools match '%s'", search)
+        return []
+
+    print(f"\nDevice pools matching '{search}':")
+    for i, name in enumerate(pools, 1):
+        print(f"  {i}. {name}")
+    answer = input(f"Select device pool(s) [1-{len(pools)}, comma separated, or 'all'] [all]: ").strip().lower() or 'all'
+    if answer == 'all':
+        selected = pools
+    else:
+        try:
+            picks = [int(x) for x in answer.split(',') if x.strip()]
+            if not picks or any(p < 1 or p > len(pools) for p in picks):
+                raise ValueError
+        except ValueError:
+            print("Invalid selection")
+            return []
+        selected = [pools[p - 1] for p in dict.fromkeys(picks)]
+    logger.info('Selected device pools: %s', ', '.join(selected))
+
+    result = axl.find_phone_names_by_device_pool(selected)
+    if not result.get('success'):
+        print(f"Error: unable to list phones: {result.get('error')}")
+        logger.error('Phone list by device pool failed: %s', result.get('error'))
+        return []
+    names = result.get('response', [])
+    print(f"Found {len(names)} phone(s) in {len(selected)} device pool(s)")
+    logger.info('Found %d phones in selected device pools', len(names))
+    return names
 
 
 def print_phones_available(phones, not_found):
@@ -274,6 +320,8 @@ if __name__ == '__main__':
         csv_file = str(data_dir / Path(csv_name).name)
         logger.info("Using CSV file: %s", csv_file)
         identifiers = read_identifiers_from_csv(csv_file, logger)
+    elif prompt_yes_no('Search by Device Pool?', default=False):
+        identifiers = select_phones_by_device_pool(axl, logger)
     else:
         value = input('Enter phone device name or MAC address: ').strip()
         identifiers = [value] if value else []
