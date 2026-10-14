@@ -3,7 +3,7 @@
 """
 Script discovery for the UC Automation menu launcher.
 
-Walks the fixed set of category directories (CUCM/CUC/CUBE/Webex), finds
+Walks the fixed set of category directories (CUCM/CUC/CUBE/Webex/Tools), finds
 runnable scripts, and extracts just enough metadata (a short title, an
 optional description, whether the script accepts extra CLI args) to build
 a menu. This module never runs anything - see setup/menu.py for that.
@@ -26,6 +26,7 @@ CATEGORIES = [
     ("CUC", "cuc", "Cisco Unity Connection"),
     ("CUBE", "cube", "Cisco Unified Border Element"),
     ("Webex", "webex", "Webex Calling / Control Hub"),
+    ("Tools", "tools", "Utilities (log search, etc.)"),
 ]
 
 # Directories to never recurse into, wherever they occur under a category root.
