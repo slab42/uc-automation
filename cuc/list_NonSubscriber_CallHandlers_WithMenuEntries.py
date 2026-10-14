@@ -52,6 +52,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import csv
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 import urllib3
 from setup.logger import setup_logger
@@ -72,6 +73,8 @@ SKIP_HANDLERS = {
     'undeliverablemessagesmailbox',
     'operator'
 }
+
+MAX_WORKERS = 10
 
 
 def clean(value):
@@ -222,11 +225,24 @@ def get_menu_entries_for_handlers(cuc, handlers, all_handlers_by_id, logger):
     total_handlers = len(handlers)
     logger.info('Retrieving MenuEntries for %d Call Handlers', total_handlers)
 
+    # Fetch menu entries for all handlers in parallel
+    results_by_id = {}
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = {executor.submit(cuc.get_menu_entries, h['objectId']): h for h in handlers}
+        for done, future in enumerate(as_completed(futures), start=1):
+            handler = futures[future]
+            try:
+                results_by_id[handler['objectId']] = future.result()
+            except Exception as e:
+                results_by_id[handler['objectId']] = {'success': False, 'error': str(e)}
+            if done % 100 == 0 or done == total_handlers:
+                logger.info('MenuEntries fetched %d/%d', done, total_handlers)
+
     for index, handler in enumerate(handlers, start=1):
         source_name = handler['displayName']
         source_id = handler['objectId']
 
-        result = cuc.get_menu_entries(source_id)
+        result = results_by_id[source_id]
         if not result.get('success'):
             logger.error('MenuEntries failed for %s: %s', source_name, result.get('error'))
             errors.append({
