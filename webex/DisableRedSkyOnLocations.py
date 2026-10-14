@@ -1,4 +1,4 @@
-# TITLE: Disable RedSky on Locations
+# TITLE: Locations Disable RedSky
 
 import warnings
 warnings.simplefilter('ignore')

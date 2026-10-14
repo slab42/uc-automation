@@ -1,137 +1,152 @@
-# TITLE: Update User Groups
+#!/usr/bin/env python3
+# TITLE: User Groups Update
+
+"""
+Add users to, or remove users from, a Webex group using a CSV of email addresses.
+
+Prompts for the CSV path (default _DATA/user_groups.csv), the group (numbered
+list) and whether to Add or Remove the listed users. Only the listed users are
+changed; existing group members are left alone. Emails that do not match a
+Webex user are logged and skipped.
+
+Uses the Webex REST API:
+    GET   /v1/groups
+    GET   /v1/people?email=
+    PATCH /v1/groups/{groupId}   (members with operation add|delete)
+
+Credentials: Webex api_token from [WEBEX:default] in .env/credentials.env.
+If not stored, the token is requested at runtime (input is hidden).
+
+Input CSV columns (see _DATA/examples/user_groups.csv.EXAMPLE):
+    Email
+    The first column of each row is used; the header row is skipped.
+
+Logs: ../_logs/<timestamp>-UpdateUserGroups.log
+"""
 
 import warnings
 warnings.simplefilter('ignore')
 
+import csv
+import os
+import sys
+from datetime import datetime
+
 import requests
-import json
-from csv import reader
 
-# bearerToken = 'MjZiZmUxZWUtMzAyYy00MWY5LWFmYjYtOTg0MGQyMDVlYmI0NWE4YWYwNjMtOTFh_PF84_64492b1f-f6e5-4acd-b532-9a0e5091fa44'
-bearerToken = ''
-groupId = ''
-locationId = ''
-menu = {}
-emails = []
-callingLicenseIds = []
-groupList = []
-usersForGroup = []
-erroredUsers = []
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, BASE_DIR)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-getMyDetailsURL = 'https://webexapis.com/v1/people/me' 
-groupListUrl = 'https://webexapis.com/v1/groups'
-groupUpdateUrl = f'https://webexapis.com/v1/groups/{groupId}'
-userLookupUrl = 'https://webexapis.com/v1/people?email='
+from setup.logger import setup_logger
+from export_location_holidaySchedule import API_BASE, get_token, api_get, select_from_list
+
+GROUPS_URL = f'{API_BASE}/groups'
+PEOPLE_URL = f'{API_BASE}/people'
+DEFAULT_CSV = os.path.join(BASE_DIR, '_DATA', 'user_groups.csv')
 
 
-# Functions
-def userLookup(email):
-    response = requests.request("GET", userLookupUrl + email, headers=defaultHeaders)
-    if response.status_code == 200:
-        if response.json()['items']:
-         for user in response.json()['items']:
-            return({'id' : user['id']})       
-        else:
-          print (f'ERROR: Skipping UserID {email} - Invalid user ID.')
+def read_emails(path):
+    """Return the email addresses from the first column of the CSV (header skipped)."""
+    emails = []
+    with open(path, 'r', encoding='utf-8-sig', newline='') as f:
+        rows = csv.reader(f)
+        next(rows, None)
+        for row in rows:
+            if row and row[0].strip():
+                emails.append(row[0].strip())
+    return emails
+
+
+def lookup_user(email, headers, logger):
+    """Return the Webex person ID for an email, or None if not found."""
+    data = api_get(PEOPLE_URL, headers, logger, params={'email': email})
+    if data is None:
+        return None
+    items = data.get('items', [])
+    if not items:
+        logger.error(f'Skipping {email} - no matching Webex user.')
+        return None
+    return items[0]['id']
+
+
+def list_groups(headers, logger):
+    """Return all groups, following pagination."""
+    groups = []
+    url, params = GROUPS_URL, {'max': 100}
+    while url:
+        response = requests.get(url, headers=headers, params=params, timeout=30)
+        if response.status_code != 200:
+            logger.error(f'GET {url} failed: HTTP {response.status_code} {response.text}')
+            return groups
+        groups.extend(response.json().get('groups', []))
+        url = response.links.get('next', {}).get('url')
+        params = None
+    return groups
+
+
+def main():
+    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    log_file = f'../_logs/{timestamp}-UpdateUserGroups.log'
+    logger = setup_logger(log_file)
+    logger.info('Update User Groups - Started')
+
+    token = get_token(logger)
+    headers = {'Authorization': f'Bearer {token}', 'Accept': 'application/json'}
+
+    # Input CSV
+    csv_path = input(f'Enter CSV file path [{DEFAULT_CSV}]: ').strip() or DEFAULT_CSV
+    try:
+        emails = read_emails(os.path.expanduser(csv_path))
+    except OSError as e:
+        logger.error(f'Unable to read {csv_path}: {e}')
+        return
+    if not emails:
+        logger.error(f'No email addresses found in {csv_path}.')
+        return
+    logger.info(f'Read {len(emails)} email(s) from {csv_path}.')
+
+    # Group selection
+    groups = list_groups(headers, logger)
+    if not groups:
+        logger.error('No groups found.')
+        return
+    group = select_from_list(groups, lambda g: g.get('displayName', g['id']), 'group')
+    logger.info(f'Group selected: {group.get("displayName")}')
+
+    # Add or remove
+    while True:
+        choice = input('Add or Remove these users? [A]dd, [R]emove [A]: ').strip().lower() or 'a'
+        if choice in ('a', 'r'):
+            break
+        print('Invalid selection.')
+    operation, past = ('add', 'added') if choice == 'a' else ('delete', 'removed')
+
+    # Resolve users
+    members = []
+    for email in emails:
+        logger.info(f'Processing {email}...')
+        user_id = lookup_user(email, headers, logger)
+        if user_id:
+            members.append({'id': user_id, 'operation': operation})
+
+    if not members:
+        logger.error('No valid users to update.')
+        logger.info('Update User Groups - Completed')
+        return
+
+    # Update the group
+    response = requests.patch(f'{GROUPS_URL}/{group["id"]}',
+                              headers={**headers, 'Content-Type': 'application/json'},
+                              json={'members': members}, timeout=30)
+    if response.status_code in (200, 201, 202, 204):
+        logger.info(f'Group updated: {len(members)} user(s) {past}, '
+                    f'{len(emails) - len(members)} skipped.')
     else:
-      print (f'ERROR: Something went wrong retriving Virtual Line {email} - Skipping')
+        logger.error(f'Group update failed: HTTP {response.status_code} {response.text}')
+
+    logger.info('Update User Groups - Completed')
 
 
-
-#############   User Input and Validation  #############
-print('This script requires two inputs:')
-print('    1. An access token used to authorize the API calls\n       (You can get yours from https://developer.webex.com/docs/api/getting-started)\n')
-print('    2. The full file path on your device for an input CSV file\n       (ex: C:\\Scripts\\huntAgents.csv on Windows or ~/Scripts/huntAgents.csv on Mac)\n')
-
-
-# Loop to allow the user to input an access token until successful.
-validationSuccess = 0
-while (validationSuccess == 0):
-    if not bearerToken :
-        bearerToken = input('Please enter your access token:  ')
-        defaultHeaders = {
-                        'Authorization': 'Bearer ' + bearerToken 
-                        }
-    # Get People API Call to validate access token.
-    validationResponse = requests.get(getMyDetailsURL, headers=defaultHeaders)
-    if validationResponse.status_code == 401:
-        # This means the access token was invalid.
-        print('Access Token was invalid.  Please check your access token was entered correctly and hasn\'t expired and try again below.\n')
-        bearerToken = ''
-    else:
-        validationSuccess = 1
-print('Access Token validated succesfully.\n')
-
-
-# Get CSV file and read it into
-input_file = input('Enter CSV file name or full path: ')
-with open(input_file, 'r', encoding='utf8') as my_file:
-    csv_file = reader(my_file)
-    next(my_file)
-    for row in csv_file:
-        emails.append(row[0])
-#############   End User Input  #############
-
-
-# Get List of Groups and check to make sure it is not 0.
-response = requests.request("GET", groupListUrl, headers=defaultHeaders)
-if response.status_code != 200 or len(response.json()['groups']) == 0:
-    print(response.status_code)
-    print(response.text)
-    quit()
-
-# Break Json into readable list for menu
-for groups in response.json()['groups']:
-    groupList.append(groups)
-
-# Create a menu of Hunt Groups to Choose From
-print()
-print('Choose a Hunt Group')
-print('------------------')
-for index, item in enumerate(groupList, start=1):
-    menu[str(index)] = item.get('displayName')
-for index, menuItem in menu.items():
-    print(f'{index}. {menuItem}')
-while True:
-    choice = input('Please make a selection: ')
-    if choice in menu.keys():
-        groupSelected = menu[choice]
-        break
-    else:
-        print('ERROR: please select a valid choice.')
-
-# Get the IDs of the selected Group and Location
-for groups in groupList:
-    if groups['displayName'] == groupSelected:
-       print('INFO: ' + groups['displayName'] + ' has been selected.')
-       groupId = groups['id']
-       break
-
-# Get a list of IDs for Hunt Group
-for entry in emails:
-  print(f'Processing {entry}...')
-  newId = userLookup(entry)
-  if newId is not None:
-     usersForGroup.append(newId)
-
-# print(usersForGroup)
-
-# Update Group
-payload = json.dumps({
-  "members" : usersForGroup
-})
-
-headers = {
-  'Content-Type': 'application/json',
-  'Authorization': 'Bearer ' + bearerToken 
-}
-
-groupUpdateUrl = f'https://webexapis.com/v1/groups/{groupId}'
-response = requests.request("PATCH", groupUpdateUrl, headers=headers, data=payload)
-
-if response.status_code not in [200, 201, 202]:
-    print('ERROR: ')
-    print(response.status_code)
-    print(response.text)
-else:
-    print('INFO: Group Updated.')
+if __name__ == '__main__':
+    main()

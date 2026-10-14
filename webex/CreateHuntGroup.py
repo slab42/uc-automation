@@ -1,4 +1,4 @@
-# TITLE: Create Hunt Group
+# TITLE: Hunt Group Create
 
 import warnings
 warnings.simplefilter('ignore')

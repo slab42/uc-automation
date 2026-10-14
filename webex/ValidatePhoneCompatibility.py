@@ -1,4 +1,4 @@
-# TITLE: Validate Phone Compatibility
+# TITLE: Phone Compatibility Validate
 """ Python Script to validate physical phone compatibility for Webex Calling
 
 This script reads a CSV of phone models and MAC addresses and validates each

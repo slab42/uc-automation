@@ -1,4 +1,4 @@
-# TITLE: Add Devices to Workspaces
+# TITLE: Workspaces Add Devices
 """ Python Script to add Devices (on Workspaces) in Control Hub
     
 As always, the cloud is a constant change validate any issues against Cisco Developer API documentation.
