@@ -19,6 +19,9 @@ The script is interactive and will prompt for:
     Credentials: checks stored credentials in credentials.env
     Use multiple clusters?: (y/n): choose 'y' to run against every CUC cluster
         in clusters.csv, or 'n' (default) to pick a single cluster.
+    Call Handler Display Name search text []: only export handlers whose
+        display name contains this text (case-insensitive). Leave blank to
+        export all non-subscriber handlers.
     Call Handler CSV Output [_DATA/non_subscriber_callhandlers.csv]: path to
         save the call handler CSV.
     Menu Entry CSV Output [_DATA/menuentries.csv]: path to save the menu
@@ -76,13 +79,15 @@ def clean(value):
     return str(value).strip() if value is not None else ''
 
 
-def classify_call_handlers(cuc, logger):
+def classify_call_handlers(cuc, logger, search_text=''):
     """
     Retrieve every Call Handler from CUC and split subscriber vs non-subscriber.
 
     Args:
         cuc: CUC API client instance
         logger: logger instance
+        search_text (str): case-insensitive text a handler's display name must
+            contain to be exported; blank exports all
 
     Returns:
         tuple: (non_subscriber_handlers, all_handlers_by_id)
@@ -103,6 +108,8 @@ def classify_call_handlers(cuc, logger):
     subscriber_count = 0
     non_subscriber_count = 0
     skipped_system_count = 0
+    filtered_out_count = 0
+    needle = search_text.strip().casefold()
     handlers = []
     all_handlers_by_id = {}
 
@@ -126,6 +133,10 @@ def classify_call_handlers(cuc, logger):
             skipped_system_count += 1
             continue
 
+        if needle and needle not in display_name.casefold():
+            filtered_out_count += 1
+            continue
+
         handlers.append({
             'displayName': display_name,
             'extension': clean(item.get('DtmfAccessId')),
@@ -139,6 +150,8 @@ def classify_call_handlers(cuc, logger):
     logger.info('Subscriber handlers excluded: %d', subscriber_count)
     logger.info('Non-subscriber handlers found: %d', non_subscriber_count)
     logger.info('Built-in/system handlers excluded: %d', skipped_system_count)
+    if needle:
+        logger.info('Handlers not matching search text "%s": %d', search_text.strip(), filtered_out_count)
     logger.info('Call handlers to export: %d', len(handlers))
     logger.info('All-handler lookup records retained: %d', len(all_handlers_by_id))
 
@@ -309,7 +322,7 @@ def output_path_for_cluster(csv_file, cluster_name, suffix):
     return str(path.with_name(f'{path.stem}-{cluster_name}{path.suffix}'))
 
 
-def run_operation_on_cluster(basepath, cluster_data, handler_csv, menu_csv, cluster_credentials, logger, suffix=False):
+def run_operation_on_cluster(basepath, cluster_data, handler_csv, menu_csv, cluster_credentials, logger, suffix=False, search_text=''):
     """
     Export non-subscriber Call Handlers and MenuEntries for a single cluster.
 
@@ -321,6 +334,7 @@ def run_operation_on_cluster(basepath, cluster_data, handler_csv, menu_csv, clus
         cluster_credentials (dict): cluster_name -> (username, password)
         logger: logger instance
         suffix (bool): if True, suffix output filenames with '-<cluster_name>'
+        search_text (str): display name filter for Call Handlers (blank = all)
 
     Returns:
         bool: True on success, False on any exception
@@ -337,7 +351,7 @@ def run_operation_on_cluster(basepath, cluster_data, handler_csv, menu_csv, clus
         logger.info('Processing cluster: %s (%s)', cluster_name, server)
         logger.info('=' * 60)
 
-        handlers, all_handlers_by_id = classify_call_handlers(cuc, logger)
+        handlers, all_handlers_by_id = classify_call_handlers(cuc, logger, search_text)
         handler_output = output_path_for_cluster(handler_csv, cluster_name, suffix)
         write_call_handlers_csv(handlers, handler_output, logger)
 
@@ -360,7 +374,7 @@ def run_operation_on_cluster(basepath, cluster_data, handler_csv, menu_csv, clus
         return False
 
 
-def run_on_all_clusters(basepath, clusters_data, handler_csv, menu_csv, logger):
+def run_on_all_clusters(basepath, clusters_data, handler_csv, menu_csv, logger, search_text=''):
     """Export non-subscriber Call Handlers and MenuEntries for every selected cluster."""
     print(f"\nProcessing {len(clusters_data)} clusters...\n")
 
@@ -373,7 +387,7 @@ def run_on_all_clusters(basepath, clusters_data, handler_csv, menu_csv, logger):
     successful = 0
     failed = 0
     for cluster in clusters_data:
-        if run_operation_on_cluster(basepath, cluster, handler_csv, menu_csv, cluster_credentials, logger, suffix=True):
+        if run_operation_on_cluster(basepath, cluster, handler_csv, menu_csv, cluster_credentials, logger, suffix=True, search_text=search_text):
             successful += 1
         else:
             failed += 1
@@ -393,6 +407,10 @@ if __name__ == '__main__':
 
     basepath = Path.cwd()
 
+    search_text = input('Call Handler Display Name search text (blank for all): ').strip()
+    if search_text:
+        logger.info('Display name search text: %s', search_text)
+
     default_handler_csv = str(basepath.parent / '_DATA' / 'non_subscriber_callhandlers.csv')
     handler_csv = input(f'Call Handler CSV Output [{default_handler_csv}]: ').strip() or default_handler_csv
 
@@ -403,7 +421,7 @@ if __name__ == '__main__':
     if clusters_data:
         use_multiple = prompt_use_multiple(len(clusters_data), 'clusters', default=False)
         if use_multiple:
-            run_on_all_clusters(basepath, clusters_data, handler_csv, menu_csv, logger)
+            run_on_all_clusters(basepath, clusters_data, handler_csv, menu_csv, logger, search_text)
         else:
             cluster = get_object_for_single_operation(basepath, 'CUC', server_type='publisher')
             if not cluster:
@@ -411,7 +429,7 @@ if __name__ == '__main__':
                 sys.exit(1)
             username, password = load_credentials('CUC', cluster['name'])
             cluster_credentials = {cluster['name']: (username, password)}
-            run_operation_on_cluster(basepath, cluster, handler_csv, menu_csv, cluster_credentials, logger)
+            run_operation_on_cluster(basepath, cluster, handler_csv, menu_csv, cluster_credentials, logger, search_text=search_text)
     else:
         cluster = get_object_for_single_operation(basepath, 'CUC', server_type='publisher')
         if not cluster:
@@ -419,6 +437,6 @@ if __name__ == '__main__':
             sys.exit(1)
         username, password = load_credentials('CUC', cluster['name'])
         cluster_credentials = {cluster['name']: (username, password)}
-        run_operation_on_cluster(basepath, cluster, handler_csv, menu_csv, cluster_credentials, logger)
+        run_operation_on_cluster(basepath, cluster, handler_csv, menu_csv, cluster_credentials, logger, search_text=search_text)
 
     logger.info("List Non-Subscriber Call Handlers - Completed")
