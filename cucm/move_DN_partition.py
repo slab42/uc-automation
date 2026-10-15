@@ -107,13 +107,17 @@ def run_csv_file(axl, logger, csv_file_path, reverse=False):
     print('Field Order: pattern, routePartition, newRoutePartition')
     if reverse:
         print('--reverse enabled: moving DNs from newRoutePartition back to routePartition')
-    with open(csv_file_path, 'r', encoding='utf8') as my_file:
+    with open(csv_file_path, 'r', encoding='utf-8-sig', newline='') as my_file:
         csv_file = reader(my_file)
-        next(my_file)
+        next(csv_file, None)
         for row in csv_file:
-            pattern = row[0]
-            route_partition_name = row[1]
-            new_route_partition_name = row[2]
+            if not any(field.strip() for field in row):
+                continue
+            if len(row) < 3:
+                logger.error('Skipping line %d, expected 3 fields (pattern, routePartition, newRoutePartition) '
+                             'but found %d: %s', csv_file.line_num, len(row), row)
+                continue
+            pattern, route_partition_name, new_route_partition_name = (f.strip() for f in row[:3])
             if reverse:
                 route_partition_name, new_route_partition_name = new_route_partition_name, route_partition_name
             move_dn_partition(axl, logger, pattern, route_partition_name, new_route_partition_name)
