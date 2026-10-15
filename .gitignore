@@ -171,3 +171,6 @@ gui/frontend/dist/
 !gui/frontend/package-lock.json
 !gui/frontend/tsconfig.json
 !gui/frontend/tsconfig.node.json
+
+# Ignore WAV files
+*.wav
