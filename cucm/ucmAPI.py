@@ -4580,7 +4580,8 @@ class AXL(object):
                             'pattern': hp_dict.get('pattern'),
                             'uuid': hp_dict.get('uuid'),
                             'huntListName': hunt_list,
-                            'routePartitionName': partition
+                            'routePartitionName': partition,
+                            'description': hp_dict.get('description') or ''
                         })
 
             result['success'] = True

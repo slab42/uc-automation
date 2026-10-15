@@ -20,6 +20,10 @@ CSV Format (default: _DATA/huntPilots.csv):
 
 Deletion Order: Line Groups -> Hunt Lists -> Hunt Pilots
 
+Can instead search Hunt Pilots by Pattern, Partition or Description (partial,
+case-insensitive match). Matches are treated like CSV entries: the Hunt Pilot and
+its Hunt List and Line Groups are all offered for deletion. Search is single cluster.
+
 Supports single or multiple CUCM clusters
 
 Arguments:
@@ -40,6 +44,72 @@ from setup.logger import setup_logger
 from setup.prompt_utils import prompt_yes_no, prompt_use_multiple, prompt_delete_mode
 from setup.multi_object_loader import get_object_for_single_operation, load_credentials, get_objects_for_multi_operation, load_credentials_for_multi_objects
 from ucmAPI import AXL
+
+
+def collect_hunt_pilot_objects(pattern, partition, axl, logger, unused_objects):
+    """Add a Hunt Pilot and its Hunt List and Line Groups to unused_objects"""
+    logger.info('Processing Hunt Pilot: %s (partition: %s)', pattern, partition or 'any')
+    print(f"Hunt Pilot: {pattern}")
+    if partition:
+        print(f"  Partition: {partition}")
+
+    hp_result = axl.get_hunt_pilot(pattern, partition)
+    if not hp_result.get('success'):
+        logger.warning('Hunt Pilot not found: %s (partition: %s)', pattern, partition or 'any')
+        print(f"  Status: NOT FOUND")
+        print()
+        return
+
+    hp = hp_result.get('response', {})
+    hp_uuid = hp.get('uuid')
+    hp_hunt_list = hp.get('huntListName', '')
+
+    logger.info('Found Hunt Pilot: %s (%s)', pattern, hp_uuid)
+    print(f"  Hunt List: {hp_hunt_list if hp_hunt_list else 'None'}")
+
+    unused_objects['hunt_pilots'].append({
+        'name': pattern,
+        'uuid': hp_uuid,
+        'hunt_list': hp_hunt_list if hp_hunt_list else 'None'
+    })
+
+    if hp_hunt_list:
+        logger.info('Fetching Hunt List: %s', hp_hunt_list)
+        hl_result = axl.get_hunt_list(hp_hunt_list)
+        if hl_result.get('success'):
+            hl = hl_result.get('response', {})
+            hl_uuid = hl.get('uuid')
+            hl_members = hl.get('members', [])
+
+            unused_objects['hunt_lists'].append({
+                'name': hp_hunt_list,
+                'uuid': hl_uuid,
+                'line_group': 'N/A'
+            })
+
+            for member in hl_members:
+                lg_name = member.get('line_group')
+                if lg_name:
+                    logger.info('Fetching Line Group: %s', lg_name)
+                    lg_result = axl.get_line_group(lg_name)
+                    if lg_result.get('success'):
+                        lg = lg_result.get('response', {})
+                        lg_uuid = lg.get('uuid')
+                        lg_member_count = lg.get('member_count', 0)
+
+                        print(f"  Line Group: {lg_name} ({lg_member_count} members)")
+
+                        unused_objects['line_groups'].append({
+                            'name': lg_name,
+                            'uuid': lg_uuid,
+                            'hunt_lists': [{
+                                'name': hp_hunt_list,
+                                'pkid': hl_uuid,
+                                'hunt_pilots': []
+                            }]
+                        })
+
+    print()
 
 
 def find_hunt_pilots_from_csv(csv_path, axl, logger):
@@ -74,72 +144,40 @@ def find_hunt_pilots_from_csv(csv_path, axl, logger):
                 if not pattern:
                     continue
 
-                logger.info('Processing Hunt Pilot: %s (partition: %s)', pattern, partition or 'any')
-                print(f"Hunt Pilot: {pattern}")
-                if partition:
-                    print(f"  Partition: {partition}")
-
-                hp_result = axl.get_hunt_pilot(pattern, partition)
-                if not hp_result.get('success'):
-                    logger.warning('Hunt Pilot not found: %s (partition: %s)', pattern, partition or 'any')
-                    print(f"  Status: NOT FOUND")
-                    print()
-                    continue
-
-                hp = hp_result.get('response', {})
-                hp_uuid = hp.get('uuid')
-                hp_hunt_list = hp.get('huntListName', '')
-
-                logger.info('Found Hunt Pilot: %s (%s)', pattern, hp_uuid)
-                print(f"  Hunt List: {hp_hunt_list if hp_hunt_list else 'None'}")
-
-                unused_objects['hunt_pilots'].append({
-                    'name': pattern,
-                    'uuid': hp_uuid,
-                    'hunt_list': hp_hunt_list if hp_hunt_list else 'None'
-                })
-
-                if hp_hunt_list:
-                    logger.info('Fetching Hunt List: %s', hp_hunt_list)
-                    hl_result = axl.get_hunt_list(hp_hunt_list)
-                    if hl_result.get('success'):
-                        hl = hl_result.get('response', {})
-                        hl_uuid = hl.get('uuid')
-                        hl_members = hl.get('members', [])
-
-                        unused_objects['hunt_lists'].append({
-                            'name': hp_hunt_list,
-                            'uuid': hl_uuid,
-                            'line_group': 'N/A'
-                        })
-
-                        for member in hl_members:
-                            lg_name = member.get('line_group')
-                            if lg_name:
-                                logger.info('Fetching Line Group: %s', lg_name)
-                                lg_result = axl.get_line_group(lg_name)
-                                if lg_result.get('success'):
-                                    lg = lg_result.get('response', {})
-                                    lg_uuid = lg.get('uuid')
-                                    lg_member_count = lg.get('member_count', 0)
-
-                                    print(f"  Line Group: {lg_name} ({lg_member_count} members)")
-
-                                    unused_objects['line_groups'].append({
-                                        'name': lg_name,
-                                        'uuid': lg_uuid,
-                                        'hunt_lists': [{
-                                            'name': hp_hunt_list,
-                                            'pkid': hl_uuid,
-                                            'hunt_pilots': []
-                                        }]
-                                    })
-
-                print()
+                collect_hunt_pilot_objects(pattern, partition, axl, logger, unused_objects)
 
     except Exception as e:
         logger.error('Error reading CSV file: %s', str(e))
         print(f"Error reading CSV file: {str(e)}")
+
+    return unused_objects
+
+
+def find_hunt_pilots_by_search(axl, logger, field, text):
+    """Find Hunt Pilots matching a pattern, partition or description search, plus their related objects"""
+    unused_objects = {
+        'line_groups': [],
+        'hunt_lists': [],
+        'hunt_pilots': []
+    }
+    key = {'pattern': 'pattern', 'partition': 'routePartitionName', 'description': 'description'}[field]
+
+    logger.info('Searching Hunt Pilots by %s: %s', field, text)
+    hp_result = axl.list_hunt_pilots()
+    if not hp_result.get('success'):
+        logger.error('Failed to fetch Hunt Pilots: %s', hp_result.get('error'))
+        print(f"Error: {hp_result.get('error')}")
+        return unused_objects
+
+    matches = [hp for hp in hp_result.get('response', [])
+               if text.lower() in (hp.get(key) or '').lower()]
+    logger.info('Found %d Hunt Pilots matching %s "%s"', len(matches), field, text)
+    print(f"\nFound {len(matches)} Hunt Pilots matching {field} '{text}'\n")
+
+    for hp in matches:
+        if hp.get('description'):
+            print(f"Description: {hp['description']}")
+        collect_hunt_pilot_objects(hp.get('pattern'), hp.get('routePartitionName') or None, axl, logger, unused_objects)
 
     return unused_objects
 
@@ -654,7 +692,34 @@ if __name__ == '__main__':
         csv_file = input('Enter CSV file name or full path [_DATA/huntPilots.csv]: ').strip() or str(basepath.parent / '_DATA' / 'huntPilots.csv')
         logger.info("Using CSV file for Hunt Pilot deletion: %s", csv_file)
 
-    if csv_file:
+    search_field = None
+    search_text = None
+    if not csv_file:
+        print("\nSelect Hunt Pilots to review:")
+        print("  1. All (scan for unused objects)")
+        print("  2. Search")
+        while True:
+            choice = input('Select [1-2] [1]: ').strip() or '1'
+            if choice in ('1', '2'):
+                break
+            print("Please enter 1 or 2")
+        if choice == '2':
+            fields = {'1': 'pattern', '2': 'partition', '3': 'description'}
+            print("\nSearch by:")
+            print("  1. Pattern")
+            print("  2. Partition")
+            print("  3. Description")
+            while True:
+                fchoice = input('Select [1-3]: ').strip()
+                if fchoice in fields:
+                    break
+                print("Please enter 1, 2 or 3")
+            search_field = fields[fchoice]
+            while not search_text:
+                search_text = input(f'Enter {search_field} text to search for (partial match): ').strip()
+            logger.info("Searching Hunt Pilots by %s: %s", search_field, search_text)
+
+    if csv_file or search_field:
         cluster = get_object_for_single_operation(basepath, 'CUCM', server_type='publisher')
         if not cluster:
             print("Error: Unable to load cluster information")
@@ -669,7 +734,10 @@ if __name__ == '__main__':
         wsdl = wsdl_dir.absolute().as_uri()
         axl = AXL(username=username, password=password, wsdl=wsdl, cucm=server, cucm_version=version)
 
-        unused_objects = find_hunt_pilots_from_csv(csv_file, axl, logger)
+        if csv_file:
+            unused_objects = find_hunt_pilots_from_csv(csv_file, axl, logger)
+        else:
+            unused_objects = find_hunt_pilots_by_search(axl, logger, search_field, search_text)
         for obj_type in ['line_groups', 'hunt_lists', 'hunt_pilots']:
             for obj in unused_objects[obj_type]:
                 obj['cluster'] = cluster['name']
