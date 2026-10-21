@@ -96,6 +96,49 @@ class AXL(object):
         return result
 
 
+    def get_advertised_pattern(self, pattern) -> dict[str, Any]:
+        """Get an Advertised Pattern
+        :param pattern: Pattern String
+        :return result dictionary with the advertised pattern in response
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+        try:
+            fullResp = self.service.getAdvertisedPatterns(pattern=pattern)
+            result['success'] = True
+            result['response'] = fullResp['return']['advertisedPatterns']
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        result = serialize_object(result)
+        return result
+
+
+    def update_advertised_pattern(self, pattern, description) -> dict[str, Any]:
+        """Update the description of an Advertised Pattern
+        :param pattern: Pattern String
+        :param description: New description
+        :return result dictionary
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+        try:
+            self.service.updateAdvertisedPatterns(pattern=pattern, description=description)
+            result['success'] = True
+            result['response'] = f'{pattern} Advertised Pattern Updated Successfully'
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        result = serialize_object(result)
+        return result
+
+
     def list_advertised_patterns(self) -> dict[str, Any]:
         """List all Advertised Patterns
         :return: result dictionary with list of advertised patterns
@@ -389,6 +432,53 @@ class AXL(object):
             self.service.removeRoutePattern(**request)
             result['success'] = True
             result['response'] = f'Route Pattern successfully removed: {pattern}'
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        result = serialize_object(result)
+        return result
+
+
+    def get_Route_Pattern(self, pattern, routePartitionName) -> dict[str, Any]:
+        """Get a route pattern
+        :param pattern: Route pattern digit string
+        :param routePartitionName: Name of the route partition the pattern is in
+        :return: result dictionary with the route pattern in response
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+        try:
+            fullResp = self.service.getRoutePattern(pattern=pattern, routePartitionName=routePartitionName)
+            result['success'] = True
+            result['response'] = fullResp['return']['routePattern']
+        except Fault as error:
+            result['response'] = 'ERROR'
+            result['error'] = error.message
+        result = serialize_object(result)
+        return result
+
+
+    def update_Route_Pattern(self, pattern, routePartitionName, description) -> dict[str, Any]:
+        """Update the description of a route pattern
+        :param pattern: Route pattern digit string
+        :param routePartitionName: Name of the route partition the pattern is in
+        :param description: New description
+        :return: result dictionary
+        """
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+        try:
+            self.service.updateRoutePattern(pattern=pattern,
+                                            routePartitionName=routePartitionName,
+                                            description=description)
+            result['success'] = True
+            result['response'] = f'Route Pattern successfully updated: {pattern}'
         except Fault as error:
             result['response'] = 'ERROR'
             result['error'] = error.message
