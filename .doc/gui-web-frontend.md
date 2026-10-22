@@ -137,3 +137,7 @@ docstring for the recognised conventions and keep new scripts to them.
 replaced by the `sitecustomize` prompt shim on pipes, prompt classifier,
 argparse options form, `_DATA` file list/upload/download. xterm.js dropped
 from the frontend.
+
+## Credentials services (2026-10-22)
+
+Settings now manages five services: CUCM, CUC, CUBE, WEBEX and REDSKY. A `[REDSKY:default]` section holds `username`, `password` (secret) and `org_id`; the Add form shows an Organization ID field for REDSKY, and a new REDSKY section is created with `org_id` alongside the usual keys.

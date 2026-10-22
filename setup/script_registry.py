@@ -26,6 +26,7 @@ CATEGORIES = [
     ("CUC", "cuc", "Cisco Unity Connection"),
     ("CUBE", "cube", "Cisco Unified Border Element"),
     ("Webex", "webex", "Webex Calling / Control Hub"),
+    ("RedSky", "redsky", "RedSky E911 location management"),
     ("Tools", "tools", "Utilities (log search, etc.)"),
 ]
 
@@ -38,6 +39,8 @@ _DENYLIST = {
     "cucm/ucmAPI.py",
     "cucm/general.py",
     "cuc/cucAPI.py",
+    "redsky/redskyAPI.py",
+    "redsky/redskyCommon.py",
     "cucm/test_css_schema.py",
     "cucm/find_css_table.py",
     "setup/test_credentials_loader.py",

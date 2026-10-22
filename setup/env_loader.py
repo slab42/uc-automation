@@ -177,6 +177,28 @@ class CredentialsLoader:
             return self._get_section_as_dict(section, cluster_name)
         return None
 
+    def get_redsky_credentials(self, name=None):
+        """
+        Get RedSky credentials (username, password, org_id).
+        RedSky is a single cloud tenant, so scripts normally use 'default'.
+        If name is None, returns a list of all available RedSky entries.
+        """
+        if not self.is_credential_storage_enabled():
+            return None if name else []
+
+        sections = [s for s in self.config.sections() if s.startswith('REDSKY:')]
+
+        if not sections:
+            return None if name else []
+
+        if name is None:
+            return [self._get_section_as_dict(s, s.split(':', 1)[1]) for s in sections]
+
+        section = f"REDSKY:{name}"
+        if self.config.has_section(section):
+            return self._get_section_as_dict(section, name)
+        return None
+
     def is_multi_cluster_enabled(self):
         """
         Return True unless [SETTINGS] multi_cluster is set to a false value
@@ -209,7 +231,7 @@ class CredentialsLoader:
         """
         List all available credentials.
         If service_type is None, lists all.
-        service_type can be 'CUCM', 'CUC', 'CUBE', or 'WEBEX'.
+        service_type can be 'CUCM', 'CUC', 'CUBE', 'WEBEX', or 'REDSKY'.
         """
         if service_type is None:
             return self.config.sections()
