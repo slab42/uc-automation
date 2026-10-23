@@ -284,3 +284,13 @@ class RedSky:
                    for ou_id, filter_type in filters]
         return self._create(f'/admin-service/alertSubscription/{subscription_id}/filters', payload,
                             f'{len(payload)} filter(s)')
+
+    def list_alert_subscriptions(self):
+        """Return the organization's alert subscriptions as raw dicts (id, name, alertTypeTO, ...)."""
+        return self._list_paged(f'/admin-service/alertSubscription/company/{self.org_id}',
+                                {'sortBy': 'name'})
+
+    def list_alert_subscription_filters(self, subscription_id):
+        """Return a subscription's scope filters as raw dicts (ouId, filterType)."""
+        return self._list_paged(f'/admin-service/alertSubscription/{subscription_id}/filters',
+                                {'sortBy': 'ouId'})
