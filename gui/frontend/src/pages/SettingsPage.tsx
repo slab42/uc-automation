@@ -27,7 +27,7 @@ function formatModified(iso: string): string {
   return d.toLocaleString()
 }
 
-const SERVICES = ['CUCM', 'CUC', 'CUBE', 'WEBEX'] as const
+const SERVICES = ['CUCM', 'CUC', 'CUBE', 'WEBEX', 'REDSKY'] as const
 
 interface EditFormState {
   username: string
@@ -62,6 +62,7 @@ export default function SettingsPage() {
   const [addIdentifier, setAddIdentifier] = useState('')
   const [addUsername, setAddUsername] = useState('')
   const [addSecret, setAddSecret] = useState('')
+  const [addOrgId, setAddOrgId] = useState('')
 
   function reload() {
     getCredentials()
@@ -197,7 +198,7 @@ export default function SettingsPage() {
     setError(null)
     try {
       await putCredentialSection(section, {
-        fields: { username: addUsername },
+        fields: addService === 'REDSKY' ? { username: addUsername, org_id: addOrgId } : { username: addUsername },
         secrets: {
           [secretKey]: addSecret ? { action: 'set', value: addSecret } : { action: 'clear' },
         },
@@ -206,6 +207,7 @@ export default function SettingsPage() {
       setAddIdentifier('')
       setAddUsername('')
       setAddSecret('')
+      setAddOrgId('')
       reload()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -383,6 +385,16 @@ export default function SettingsPage() {
                 onChange={(e) => setAddUsername(e.target.value)}
               />
             </label>
+            {addService === 'REDSKY' && (
+              <label>
+                Organization ID
+                <input
+                  type="text"
+                  value={addOrgId}
+                  onChange={(e) => setAddOrgId(e.target.value)}
+                />
+              </label>
+            )}
             <label>
               {addService === 'WEBEX' ? 'API token' : 'Password'}
               <input

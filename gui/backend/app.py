@@ -238,6 +238,8 @@ def create_app() -> FastAPI:
             values.setdefault(default_secret, "")
             if service != "WEBEX":
                 values.setdefault("username", "")
+            if service == "REDSKY":
+                values.setdefault("org_id", "")
             values = {k: ("" if v is None else v) for k, v in values.items()}
 
         ini_editor.upsert_section(CREDENTIALS_PATH, section, values)
